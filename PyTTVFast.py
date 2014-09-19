@@ -79,9 +79,9 @@ class TTVCompute(object):
 		assert type(planet_params)==np.ndarray and (planet_params.shape)[-1]==7, "Bad planet parameters array!"
 
 		nplanets=len(planet_params)
-		params = array([1.0,GM])
+		params = np.array([1.0,GM])
 		for planet in planet_params:
-			params = append(params,planet)
+			params = np.append(params,planet)
 		
 		if input_n==0 or input_n==1:
 			periods = planet_params[:,1]
@@ -93,14 +93,14 @@ class TTVCompute(object):
 
 		dt = dtfrac * np.min(periods)
 		
-		n_events = int(np.sum(ceil( (tfin-t0) / periods + 1) ))
+		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) ))
 		
 		model = (n_events * CALCTRANSIT)()
 		for transit in model:
 			transit.time = DEFAULT_TRANSIT
 			
 		self.interface.TTVFast(params,dt,t0,tfin,nplanets,model,None,0,n_events, input_n)
-		transits = array([ ( transit.planet,transit.time ) for transit in model if transit.time != DEFAULT_TRANSIT ])
+		transits = np.array([ ( transit.planet,transit.time ) for transit in model if transit.time != DEFAULT_TRANSIT ])
 		
 		transitlists = []
 		for i in range(nplanets):
@@ -115,70 +115,136 @@ def linefit(x,y):
 	return np.linalg.lstsq(A,y)[0]
 
 class TTVFitness(TTVCompute):
+	"""
+	A class for evaluating the chi-squared fitness of sets of orbital parameters in reproducing a set of observed transit times.
+	An TTVFitness object is instantiated with a list of the observed transit data.  The transit data for each planet should be in 
+	the form of Nx3 array, with each entry having the form:
+	\t\t\t[ transit number, transit time, uncertainty in transit time].
+	"""
 	def __init__(self,observed_transit_data):
+		self.interface = libwrapper()
+
 		self.observed_transit_data = observed_transit_data
 
 		self.nplanets = len(observed_transit_data)
-		self.transit_numbers = [ data[:,0] for data in observed_transit_data ] 
+		self.transit_numbers = [ (data[:,0]).astype(int) for data in observed_transit_data ] 
 		self.transit_times = [ data[:,1] for data in observed_transit_data ] 
 		self.transit_uncertainties = [ data[:,2] for data in observed_transit_data ] 
 		
-		self.period_estimates = [linefit(data[:,0],data[:,1])[1] for data in self.observed_transit_data ]
+		self.tInit_estimates,self.period_estimates = np.array([linefit(data[:,0],data[:,1]) for data in self.observed_transit_data ]).T
 		pMax = max(self.period_estimates)
+		pMin = min(self.period_estimates)
 		# Begginings and ends of integration to be a little more than a full period of the longest period
 		# planet 
-		self.t0 = min([ np.min(times) for times in self.transit_times ]) - 1.1 * pMax
-		self.tFin = max([ np.min(times) for times in self.transit_times ]) + 1.1 * pMax
+		self.t0 = min([ np.min(times) for times in self.transit_times ]) - 0.1 * pMin
+		self.tFin = max([ np.max(times) for times in self.transit_times ]) + 1.1 * pMax
 
-	def CoplanarFitness(self,params,**kwargs):
+	def CoplanarParametersTransits(self,params,**kwargs):
+		"""\nReturn the transit times of a coplanar planet system for the given set of 'params'.
+		'params' should be an N by 5 array, where N is the number of planets.  The parameters
+		for each planet are: \n\t[Mass, e*cos(peri), e*sin(peri), Period, Mean Anomaly]
+		Mean anomalies should be given in radians. """
 		planet_params = params.reshape(-1,5)
 		masses = planet_params[:,0]
-		eccs = np.norm( planet_params[:,1:3] )
-		arg_peri = np.arctan2(planet_params[:,2] , planet_params[:,1])
+		eccs = np.linalg.norm( planet_params[:,1:3],axis=1 )
+		arg_peri = np.arctan2(planet_params[:,2] , planet_params[:,1]) * 180. / np.pi
 		periods = planet_params[:,3]
-		meanAnoms = planet_params[:,4]
+		meanAnoms = planet_params[:,4] * 180. / np.pi
+		# Coplanar planets -- all inclinations are 90 deg. (relative to plane of sky)
 		incs = np.ones(self.nplanets)*90.
 		Omegas = np.zeros(self.nplanets)
 		
-		input = np.vstack([masses,periods,eccs,incs,Omega,arg_peri,meanAnoms]).T
+		input = np.vstack([masses,periods,eccs,incs,Omegas,arg_peri,meanAnoms]).T
 		nbody_transits = self.TransitTimes(self.tFin, input, input_type='jacobi', t0 = self.t0 )
+		return nbody_transits
 
+	def CoplanarParametersFitness(self,params,**kwargs):
+		"""\nReturn the chi-squared fitness of transit times of a coplanar planet system generatedf from
+		 the given set of 'params'. 'params' should be an N by 5 array, where N is the number of planets.
+		  The parameters for each planet are:
+		\t [Mass, e*cos(peri), e*sin(peri), Period, Mean Anomaly]. 
+		The fitness is returned as '-inf' if the N-body integration does not return a sufficient number of 
+		transits to match the observed data for any of the planets."""
+		nbody_transits = self.CoplanarParametersTransits(params)
 		chi2 = 0.0
 
 		for i in range(self.nplanets):
 			observed_times = self.transit_times[i]
 			observed_numbers = self.transit_numbers[i]
+			uncertainties = self.transit_uncertainties[i]
 			#
+			nbody_times = (nbody_transits[i])[observed_numbers]
 			if np.max(observed_numbers) > len(nbody_times):
 				return -inf
-			nbody_times = nbody_transits[i]
-			uncertainties = self.transit_times[i]
 
 			diff = (observed_times - nbody_times )			
-			chi2 += -0.5 * np.sum( np.power(diff,2) / np.power(uncertainties,2) )
+			
+			chi2+= -0.5 * np.sum( np.power(diff,2.) / np.power(uncertainties,2.) )
 
 		return chi2
+	def GenerateInitialConditions(self,masses,evectors):
+		"""
+		For a list of masses and eccentricity vectors, create inital condition parameters with
+		periods set to the average planet periods measured by linear fit and with initial values
+		of Mean Anomaly that result in the first observed transit occuring at the observed time
+		for an unperturbed orbit.
+		"""
+		assert masses.shape[0]==evectors.shape[0],"Input parameters must be properly shaped numpy arrays!"
+		assert masses.shape[1]==self.nplanets and evectors.shape[1]==self.nplanets ,"Input parameters must be properly shaped numpy arrays!"
+		assert evectors.shape[2]==2,"Input parameters must be properly shaped numpy arrays!"
 		
+		periods = self.period_estimates
+		initTransits = self.tInit_estimates
+		epoch = self.t0
+		params = []
+		for initpar in zip(masses,evectors):
+			mass = initpar[0]
+			evecs = initpar[1]
+			eccs = np.linalg.norm(evecs,axis=1)
+			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
+			meanAnoms =  -1.*(initTransits - epoch) * 2 * np.pi / periods + 2. * evecs[:,1] - pmgs
+			paramArray = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
+			params.append(paramArray)
+		return params
 
-if False:
+if __name__=="__main__":
 	# planet 1
 	mass=1.e-5
 	per,e,i = 1.0, 0.02, 90.
-	LongNode, ArgPeri, MeanAnom = np.random.rand(3) * 360
+	ArgPeri, MeanAnom = np.random.rand(2) * 2.0 * np.pi
+	LongNode = 0.0
 	els1 = np.array([mass,per,e,i,LongNode,ArgPeri,MeanAnom])
+	els1[4:] *= 180. / np.pi
+	pars1 = np.array([mass,e*np.cos(ArgPeri),e*np.sin(ArgPeri),per,MeanAnom])
 	# planet 2
 	mass=1.e-5
 	per,e,i = 1.515, 0.03, 90.
-	LongNode, ArgPeri, MeanAnom = np.random.rand(3) * 360
+	ArgPeri, MeanAnom = np.random.rand(2) * 2.0 * np.pi
+	LongNode = 0.0
 	els2 = np.array([mass,per,e,i,LongNode,ArgPeri,MeanAnom])
+	els2[4:] *= 180. / np.pi
+	pars2 = np.array([mass,e*np.cos(ArgPeri),e*np.sin(ArgPeri),per,MeanAnom])
 	
-	nbody = TTVCompute()
-	planet_params=np.array([els1,els2])
-	transits = nbody.TransitTimes(100.,planet_params)
 	
-if __name__=="__main__":
-	data1 = np.loadtxt('./inner.ttv')	
-	data2 = np.loadtxt('./outer.ttv')
+	pars = np.array([pars1,pars2]).reshape(-1)
+	#def TransitTimes(self,tfin,planet_params,GM=1.0,t0=0.0,input_type='astro',dtfrac=0.025):
+	nbody_create = TTVCompute()
+	transits1,transits2 = nbody_create.TransitTimes(100.,np.array([els1,els2]),input_type='jacobi')
+	data1 = np.array([ (i,transit+np.random.normal(scale=1.e-4),1.e-4) for i,transit in enumerate(transits1) ])
+	data2 = np.array([ (i,transit+np.random.normal(scale=1.e-4),1.e-4) for i,transit in enumerate(transits2) ])
+	#data1 = np.loadtxt('./inner.ttv')	
+	#data2 = np.loadtxt('./outer.ttv')
 	observed_data = [data1,data2]
 	nbody_fit = TTVFitness(observed_data)
-	print nbody_fit.period_estimates
+	transits=nbody_fit.CoplanarParametersTransits(pars)
+	
+	masses = np.random.normal(2.e-5,1.e-6,(100,2))
+	evecs = np.random.normal(0.0,0.01,(100,2,2))
+	ics = nbody_fit.GenerateInitialConditions(masses,evecs)
+	#print "inner planet:"
+	#for i,time in enumerate(transits[0]):
+	#	print i,time,data1[i%len(data1)][1]
+	#for i,time in enumerate(transits[1]):
+	#	print i,time,data2[i%len(data2)][1]
+	#fit=nbody_fit.CoplanarParametersFitness(pars)
+	#print "Fitness comptued to be %.3f"%fit
