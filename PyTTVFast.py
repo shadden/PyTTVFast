@@ -2,7 +2,8 @@ from ctypes import *
 import numpy as np
 
 DEFAULT_TRANSIT = -1
-LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
+#LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
+LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
 
 def get_ctype_ptr(dtype,dim,**kwargs):
 	return np.ctypeslib.ndpointer(dtype=dtype,ndim=dim,flags='C',**kwargs)
@@ -107,9 +108,58 @@ class TTVCompute(object):
 			transitlists.append((transits[:,1])[condition])
 		return transitlists
 			
+def linefit(x,y):
+	assert len(x) == len(y), "Cannot fit line with different length dependent and independent variable data!"
+	const = np.ones(len(y))
+	A = np.vstack([const,x]).T
+	return np.linalg.lstsq(A,y)[0]
 
+class TTVFitness(TTVCompute):
+	def __init__(self,observed_transit_data):
+		self.observed_transit_data = observed_transit_data
 
-if __name__=="__main__":
+		self.nplanets = len(observed_transit_data)
+		self.transit_numbers = [ data[:,0] for data in observed_transit_data ] 
+		self.transit_times = [ data[:,1] for data in observed_transit_data ] 
+		self.transit_uncertainties = [ data[:,2] for data in observed_transit_data ] 
+		
+		self.period_estimates = [linefit(data[:,0],data[:,1])[1] for data in self.obesrved_transit_data ]
+		# Begginings and ends of integration to be a little more than a full period of the longest period
+		# planet 
+		self.t0 = min([ np.min(times) for times in self.transit_times ]) - 1.1 * pMax
+		self.tFin = max([ np.min(times) for times in self.transit_times ]) + 1.1 * pMax
+
+	def CoplanarFitness(self,params,**kwargs):
+		planet_params = params.reshape(-1,5)
+		masses = planet_params[:,0]
+		eccs = np.norm( planet_params[:,1:3] )
+		arg_peri = np.arctan2(planet_params[:,2] , planet_params[:,1])
+		periods = planet_params[:,3]
+		meanAnoms = planet_params[:,4]
+		incs = np.ones(self.nplanets)*90.
+		Omegas = np.zeros(self.nplanets)
+		
+		input = np.vstack([masses,periods,eccs,incs,Omega,arg_peri,meanAnoms]).T
+		nbody_transits = self.TransitTimes(self.tMax + X, input ,input_type='jacobi',t0 = self.tMin + Y , kwargs )
+
+		chi2 = 0.0
+
+		for i in range(self.nplanets):
+			observed_times = self.transit_times[i]
+			observed_numbers = self.transit_numbers[i]
+			#
+			if np.max(observed_numbers) > len(nbody_times):
+				return -inf
+			nbody_times = nbody_transits[i]
+			uncertainties = self.transit_times[i]
+
+			diff = (observed_times - nbody_times )			
+			chi2 += -0.5 * np.sum( np.power(diff,2) / np.power(uncertainties,2) )
+
+		return chi2
+		
+
+if False:
 	# planet 1
 	mass=1.e-5
 	per,e,i = 1.0, 0.02, 90.
@@ -125,4 +175,9 @@ if __name__=="__main__":
 	planet_params=np.array([els1,els2])
 	transits = nbody.TransitTimes(100.,planet_params)
 	
-	
+if __name__=="__main__":
+	data1 = loadtxt('./inner.ttv')	
+	data2 = loadtxt('./outer.ttv')
+	observed_data = [data1,data2]
+	nbody_fit = TTVFitness(observed_data)
+	print nbody_fit.period_estimates
