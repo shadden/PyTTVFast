@@ -123,7 +123,8 @@ class TTVFitness(TTVCompute):
 		self.transit_times = [ data[:,1] for data in observed_transit_data ] 
 		self.transit_uncertainties = [ data[:,2] for data in observed_transit_data ] 
 		
-		self.period_estimates = [linefit(data[:,0],data[:,1])[1] for data in self.obesrved_transit_data ]
+		self.period_estimates = [linefit(data[:,0],data[:,1])[1] for data in self.observed_transit_data ]
+		pMax = max(self.period_estimates)
 		# Begginings and ends of integration to be a little more than a full period of the longest period
 		# planet 
 		self.t0 = min([ np.min(times) for times in self.transit_times ]) - 1.1 * pMax
@@ -140,7 +141,7 @@ class TTVFitness(TTVCompute):
 		Omegas = np.zeros(self.nplanets)
 		
 		input = np.vstack([masses,periods,eccs,incs,Omega,arg_peri,meanAnoms]).T
-		nbody_transits = self.TransitTimes(self.tMax + X, input ,input_type='jacobi',t0 = self.tMin + Y , kwargs )
+		nbody_transits = self.TransitTimes(self.tFin, input, input_type='jacobi', t0 = self.t0 )
 
 		chi2 = 0.0
 
@@ -176,8 +177,8 @@ if False:
 	transits = nbody.TransitTimes(100.,planet_params)
 	
 if __name__=="__main__":
-	data1 = loadtxt('./inner.ttv')	
-	data2 = loadtxt('./outer.ttv')
+	data1 = np.loadtxt('./inner.ttv')	
+	data2 = np.loadtxt('./outer.ttv')
 	observed_data = [data1,data2]
 	nbody_fit = TTVFitness(observed_data)
 	print nbody_fit.period_estimates
