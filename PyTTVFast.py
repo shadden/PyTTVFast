@@ -208,6 +208,7 @@ class TTVFitness(TTVCompute):
 		return params
 
 if __name__=="__main__":
+	print "Hello world!"
 	# planet 1
 	mass=1.e-5
 	per,e,i = 1.0, 0.02, 90.
