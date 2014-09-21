@@ -1,10 +1,11 @@
 from ctypes import *
 import numpy as np
-from scipy.optimize import minimize,brute
+from scipy.optimize import minimize,fmin_tnc,fmin,fmin_l_bfgs_b
 
 DEFAULT_TRANSIT = -1
 LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
 #LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
+PLOTS = False
 
 def get_ctype_ptr(dtype,dim,**kwargs):
 	return np.ctypeslib.ndpointer(dtype=dtype,ndim=dim,flags='C',**kwargs)
@@ -183,6 +184,21 @@ class TTVFitness(TTVCompute):
 			chi2+= -0.5 * np.sum( np.power(diff,2.) / np.power(uncertainties,2.) )
 
 		return chi2
+	
+	def FitBestPeriods(self,masses,evecs):
+		def f(periods):
+			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
+			# TTVFast coordinates have observer along z-axis so planets transit when theta = pi/2
+			meanAnoms =   0.5 * np.pi - (self.tInit_estimates - self.t0) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs  
+			pars = np.array(np.vstack([masses,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
+			#return pars
+			return -1.0 * self.CoplanarParametersFitness(pars)
+
+		ptol = 1.e-2
+		period_bounds = [np.array([1.-ptol,1.+ptol ])*p for p in nbody_fit.period_estimates]	
+		res = minimize(f,self.period_estimates,bounds=period_bounds,method='L-BFGS-B') #'TNC' 
+		return res
+			
 	def GenerateInitialConditions(self,masses,evectors):
 		"""
 		For a list of masses and eccentricity vectors, create inital condition parameters with
@@ -194,32 +210,17 @@ class TTVFitness(TTVCompute):
 		assert masses.shape[1]==self.nplanets and evectors.shape[1]==self.nplanets ,"Input parameters must be properly shaped numpy arrays!"
 		assert evectors.shape[2]==2,"Input parameters must be properly shaped numpy arrays!"
 		
-		periods = self.period_estimates
 		initTransits = self.tInit_estimates
 		epoch = self.t0
 		params = []
 		for initpar in zip(masses,evectors):
 			mass = initpar[0]
 			evecs = initpar[1]
-			eccs = np.linalg.norm(evecs,axis=1)
+			periods = self.FitBestPeriods(mass,evecs).x
 			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
 			# TTVFast coordinates have observer along z-axis so planets transit when theta = pi/2
 			meanAnoms =   0.5 * np.pi - (initTransits - epoch) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs  
-			
-			
 			ic = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
-			#def f(x):
-			#	pars = ic.copy()
-			#	pars[3] = x[0]
-			#	pars[8] = x[1]
-			#	return -1.0*nbody_fit.CoplanarParametersFitness(pars)
-			#ptol = 3.e-3
-			#period_bounds = [np.array([1.-ptol,1.+ptol ])*p for p in nbody_fit.period_estimates]
-			#res = minimize(f,nbody_fit.period_estimates,bounds=period_bounds,method='Nelder-Mead')#
-			#fit_periods = res.x
-			#fit_periods = resbrute
-			#paramArray = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],fit_periods,meanAnoms]).T).reshape(-1)
-			#params.append(paramArray)
 			params.append(ic)
 		return params
 
@@ -255,11 +256,21 @@ if __name__=="__main__":
 	nbody_fit = TTVFitness(observed_data)
 	transits=nbody_fit.CoplanarParametersTransits(pars)
 	
-	masses = np.random.normal(2.e-5,1.e-6,(2,2))
-	evecs = np.random.normal(0.0,0.05,(2,2,2))
+	Ninit = 10
+	masses = np.random.normal(2.e-5,1.e-6,(Ninit,2))
+	evecs = np.random.normal(0.0,0.05,(Ninit,2,2))
 	ics = nbody_fit.GenerateInitialConditions(masses,evecs)
+	if PLOTS:
+		for i in range(2):
+			ttv = nbody_fit.transit_times[i] -nbody_fit.transit_numbers[i]*nbody_fit.period_estimates[i] - nbody_fit.tInit_estimates[i]
+			plot(nbody_fit.transit_times[i],ttv,'x')
 	for ic in ics:
 		tIn,tOut = nbody_fit.CoplanarParametersTransits(ic)
+		nbtransits = [ tIn[nbody_fit.transit_numbers[0]],tOut[nbody_fit.transit_numbers[1]] ]
+		if PLOTS:
+			for i in range(2):
+				ttv = nbtransits[i] -nbody_fit.transit_numbers[i]*nbody_fit.period_estimates[i] - nbody_fit.tInit_estimates[i]
+				plot( nbtransits[i],ttv,'o')
+			
 		print "%.2f (%.2f), %.2f (%.2f)" %(tIn[0],nbody_fit.tInit_estimates[0],tOut[0],nbody_fit.tInit_estimates[1])
 		print "Fitness: %.2f" % nbody_fit.CoplanarParametersFitness(ic)
-	
