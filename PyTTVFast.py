@@ -2,8 +2,8 @@ from ctypes import *
 import numpy as np
 
 DEFAULT_TRANSIT = -1
-#LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
-LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
+LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
+#LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
 
 def get_ctype_ptr(dtype,dim,**kwargs):
 	return np.ctypeslib.ndpointer(dtype=dtype,ndim=dim,flags='C',**kwargs)
@@ -202,13 +202,14 @@ class TTVFitness(TTVCompute):
 			evecs = initpar[1]
 			eccs = np.linalg.norm(evecs,axis=1)
 			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
-			meanAnoms =  -1.*(initTransits - epoch) * 2 * np.pi / periods + 2. * evecs[:,1] - pmgs
+			# TTVFast coordinates have observer along z-axis so planets transit when theta = pi/2
+			meanAnoms =   0.5 * np.pi - (initTransits - epoch) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs  
 			paramArray = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
 			params.append(paramArray)
 		return params
 
 if __name__=="__main__":
-	print "Hello world!"
+
 	# planet 1
 	mass=1.e-5
 	per,e,i = 1.0, 0.02, 90.
@@ -240,12 +241,9 @@ if __name__=="__main__":
 	transits=nbody_fit.CoplanarParametersTransits(pars)
 	
 	masses = np.random.normal(2.e-5,1.e-6,(100,2))
-	evecs = np.random.normal(0.0,0.01,(100,2,2))
+	evecs = np.random.normal(0.0,0.05,(100,2,2))
 	ics = nbody_fit.GenerateInitialConditions(masses,evecs)
-	#print "inner planet:"
-	#for i,time in enumerate(transits[0]):
-	#	print i,time,data1[i%len(data1)][1]
-	#for i,time in enumerate(transits[1]):
-	#	print i,time,data2[i%len(data2)][1]
-	#fit=nbody_fit.CoplanarParametersFitness(pars)
-	#print "Fitness comptued to be %.3f"%fit
+	for ic in ics[:10]:
+		tIn,tOut = nbody_fit.CoplanarParametersTransits(ic)
+		print "%.2f (%.2f), %.2f (%.2f)" %(tIn[0],nbody_fit.tInit_estimates[0],tOut[0],nbody_fit.tInit_estimates[1])
+		print "Fitness: %.2f" % nbody_fit.CoplanarParametersFitness(ic)
