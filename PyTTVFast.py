@@ -1,5 +1,6 @@
 from ctypes import *
 import numpy as np
+from scipy.optimize import minimize,brute
 
 DEFAULT_TRANSIT = -1
 LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
@@ -137,7 +138,7 @@ class TTVFitness(TTVCompute):
 		# Begginings and ends of integration to be a little more than a full period of the longest period
 		# planet 
 		self.t0 = min([ np.min(times) for times in self.transit_times ]) - 0.1 * pMin
-		self.tFin = max([ np.max(times) for times in self.transit_times ]) + 1.1 * pMax
+		self.tFin = max([ np.max(times) for times in self.transit_times ]) + 3.1 * pMax # extra padding if a bad period is guessed...
 
 	def CoplanarParametersTransits(self,params,**kwargs):
 		"""\nReturn the transit times of a coplanar planet system for the given set of 'params'.
@@ -204,8 +205,22 @@ class TTVFitness(TTVCompute):
 			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
 			# TTVFast coordinates have observer along z-axis so planets transit when theta = pi/2
 			meanAnoms =   0.5 * np.pi - (initTransits - epoch) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs  
-			paramArray = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
-			params.append(paramArray)
+			
+			
+			ic = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
+			#def f(x):
+			#	pars = ic.copy()
+			#	pars[3] = x[0]
+			#	pars[8] = x[1]
+			#	return -1.0*nbody_fit.CoplanarParametersFitness(pars)
+			#ptol = 3.e-3
+			#period_bounds = [np.array([1.-ptol,1.+ptol ])*p for p in nbody_fit.period_estimates]
+			#res = minimize(f,nbody_fit.period_estimates,bounds=period_bounds,method='Nelder-Mead')#
+			#fit_periods = res.x
+			#fit_periods = resbrute
+			#paramArray = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],fit_periods,meanAnoms]).T).reshape(-1)
+			#params.append(paramArray)
+			params.append(ic)
 		return params
 
 if __name__=="__main__":
@@ -240,10 +255,11 @@ if __name__=="__main__":
 	nbody_fit = TTVFitness(observed_data)
 	transits=nbody_fit.CoplanarParametersTransits(pars)
 	
-	masses = np.random.normal(2.e-5,1.e-6,(100,2))
-	evecs = np.random.normal(0.0,0.05,(100,2,2))
+	masses = np.random.normal(2.e-5,1.e-6,(2,2))
+	evecs = np.random.normal(0.0,0.05,(2,2,2))
 	ics = nbody_fit.GenerateInitialConditions(masses,evecs)
-	for ic in ics[:10]:
+	for ic in ics:
 		tIn,tOut = nbody_fit.CoplanarParametersTransits(ic)
 		print "%.2f (%.2f), %.2f (%.2f)" %(tIn[0],nbody_fit.tInit_estimates[0],tOut[0],nbody_fit.tInit_estimates[1])
 		print "Fitness: %.2f" % nbody_fit.CoplanarParametersFitness(ic)
+	
