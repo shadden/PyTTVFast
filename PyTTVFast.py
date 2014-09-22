@@ -189,7 +189,8 @@ class TTVFitness(TTVCompute):
 		def f(periods):
 			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
 			# TTVFast coordinates have observer along z-axis so planets transit when theta = pi/2
-			meanAnoms =   0.5 * np.pi - (self.tInit_estimates - self.t0) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs  
+			meanAnoms =  0.5 * np.pi - (self.tInit_estimates - self.t0) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs
+			meanAnoms = np.mod(meanAnoms,2.*np.pi)
 			pars = np.array(np.vstack([masses,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
 			#return pars
 			return -1.0 * self.CoplanarParametersFitness(pars)
@@ -219,7 +220,8 @@ class TTVFitness(TTVCompute):
 			periods = self.FitBestPeriods(mass,evecs).x
 			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
 			# TTVFast coordinates have observer along z-axis so planets transit when theta = pi/2
-			meanAnoms =   0.5 * np.pi - (initTransits - epoch) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs  
+			meanAnoms =   0.5 * np.pi - (initTransits - epoch) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs
+			meanAnoms = np.mod(meanAnoms + np.pi,2. * np.pi) - np.pi
 			ic = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
 			params.append(ic)
 		return params
