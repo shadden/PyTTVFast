@@ -196,7 +196,7 @@ class TTVFitness(TTVCompute):
 			return -1.0 * self.CoplanarParametersFitness(pars)
 
 		ptol = 1.e-2
-		period_bounds = [np.array([1.-ptol,1.+ptol ])*p for p in nbody_fit.period_estimates]	
+		period_bounds = [np.array([1.-ptol,1.+ptol ])*p for p in self.period_estimates]	
 		res = minimize(f,self.period_estimates,bounds=period_bounds,method='L-BFGS-B') #'TNC' 
 		return res
 			
