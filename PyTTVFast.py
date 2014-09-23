@@ -4,8 +4,8 @@ import matplotlib.pyplot as pl
 from scipy.optimize import minimize,fmin_tnc,fmin,fmin_l_bfgs_b
 
 DEFAULT_TRANSIT = -1
-LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
-#LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
+#LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
+LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
 PLOTS = False
 
 def get_ctype_ptr(dtype,dim,**kwargs):
@@ -176,9 +176,9 @@ class TTVFitness(TTVCompute):
 			observed_numbers = self.transit_numbers[i]
 			uncertainties = self.transit_uncertainties[i]
 			#
+			if np.max(observed_numbers) > len(nbody_transits[i]):
+				return -np.inf
 			nbody_times = (nbody_transits[i])[observed_numbers]
-			if np.max(observed_numbers) > len(nbody_times):
-				return -inf
 
 			diff = (observed_times - nbody_times )			
 			
@@ -242,6 +242,15 @@ class TTVFitness(TTVCompute):
 			pl.plot(transits[i],transits[i] - per * np.arange(len(transits[i])) - tInit,'%so'%col) 
 			pl.errorbar(otransits[i],otransits[i] - per * self.transit_numbers[i] - tInit,fmt='%ss'%col,yerr=self.transit_uncertainties[i])
 			
+if __name__=="__main__":
+	
+	input_data = np.loadtxt("./inner.ttv")
+	input_data1= np.loadtxt("./outer.ttv")
+	while min(append(input_data[:,0],input_data1[:,0])) != 0:
+		print "re-numbering transits..."
+		input_data[:,0] -= 1
+		input_data1[:,0] -= 1
+	nbody_fit = TTVFitness([input_data,input_data1])
 if __name__==False: #"__main__":
 
 	# planet 1

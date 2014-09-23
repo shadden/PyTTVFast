@@ -12,4 +12,4 @@ run_TTVFast: run_TTVFast.c TTVFast.o
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 clean:
-	rm -rf *.o
+	rm -rf *.o *.so
