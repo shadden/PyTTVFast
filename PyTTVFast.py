@@ -1,5 +1,6 @@
 from ctypes import *
 import numpy as np
+import matplotlib.pyplot as pl
 from scipy.optimize import minimize,fmin_tnc,fmin,fmin_l_bfgs_b
 
 DEFAULT_TRANSIT = -1
@@ -200,7 +201,7 @@ class TTVFitness(TTVCompute):
 		res = minimize(f,self.period_estimates,bounds=period_bounds,method='L-BFGS-B') #'TNC' 
 		return res
 			
-	def GenerateInitialConditions(self,masses,evectors):
+	def GenerateInitialConditions(self,masses,evectors,lazy=False):
 		"""
 		For a list of masses and eccentricity vectors, create inital condition parameters with
 		periods set to the average planet periods measured by linear fit and with initial values
@@ -217,7 +218,10 @@ class TTVFitness(TTVCompute):
 		for initpar in zip(masses,evectors):
 			mass = initpar[0]
 			evecs = initpar[1]
-			periods = self.FitBestPeriods(mass,evecs).x
+			if lazy:
+				periods = self.period_estimates
+			else:
+				periods = self.FitBestPeriods(mass,evecs).x
 			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
 			# TTVFast coordinates have observer along z-axis so planets transit when theta = pi/2
 			meanAnoms =   0.5 * np.pi - (initTransits - epoch) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs
@@ -225,8 +229,20 @@ class TTVFitness(TTVCompute):
 			ic = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
 			params.append(ic)
 		return params
-
-if __name__=="__main__":
+	
+	def PlotTTV(self,params):
+		transits = self.CoplanarParametersTransits(params)
+		otransits = self.transit_times
+		pl.figure()
+		color_pallette = ['b','r','g']
+		for i in range(self.nplanets):
+			col = color_pallette[i%len(color_pallette)]
+			per = self.period_estimates[i]
+			tInit = self.tInit_estimates[i]
+			pl.plot(transits[i],transits[i] - per * np.arange(len(transits[i])) - tInit,'%so'%col) 
+			pl.errorbar(otransits[i],otransits[i] - per * self.transit_numbers[i] - tInit,fmt='%ss'%col,yerr=self.transit_uncertainties[i])
+			
+if __name__==False: #"__main__":
 
 	# planet 1
 	mass=1.e-5
