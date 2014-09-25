@@ -265,9 +265,10 @@ class TTVFitness(TTVCompute):
 		
 		mass_list = masses * (1. + sigma_dm_m * np.random.randn(N,self.nplanets) )
 		evecs_list = evecs  +  sigma_e * np.random.randn(N,self.nplanets,2)
-		
-		return self.GenerateInitialConditions(mass_list,evecs_list,lazy=True)
-		
+		iclist = np.array(self.GenerateInitialConditions(mass_list,evecs_list,lazy=True))
+		periods = iclist.reshape(N,-1,5)[:,:,3] * (1.+1.e-4*np.random.randn(N,self.nplanets)) 
+		iclist[:,(3,8)] = periods
+		return iclist
 	def PlotTTV(self,params):
 		transits = self.CoplanarParametersTransits(params)
 		otransits = self.transit_times
@@ -337,7 +338,7 @@ class TTVFitness(TTVCompute):
 			uncertainties = self.transit_uncertainties[i]
 			diff = transform((nbody_transits[i])[self.transit_numbers[i]]) - self.transit_times[i]
 			chi2+= -0.5 * np.sum( np.power(diff,2.) / np.power(uncertainties,2.) )
-		return chi2,nbody_params
+		return chi2
 	
 	def convert_params(self,params):
 		shaped_params = params.reshape(-1,5)
