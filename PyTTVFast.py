@@ -8,6 +8,7 @@ LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterfa
 #LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
 PLOTS = False
 
+
 def get_ctype_ptr(dtype,dim,**kwargs):
 	return np.ctypeslib.ndpointer(dtype=dtype,ndim=dim,flags='C',**kwargs)
 	
@@ -93,19 +94,32 @@ class libwrapper(object):
 		self._TTVFast.restype = c_int
 		def check_errors(ret, func, args):
 			if ret<0:
-				print args
-				raise RuntimeError("TTVFast returned errors for the above arguments")
+				raise RuntimeError("TTVFast returned error code %d for the given arguments"%ret)
 			return ret
 		self._TTVFast.errcheck = check_errors
 	def TTVFast(self,pars,dt,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag):
-		self._TTVFast(pars,dt,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag)
+		try:
+			self._TTVFast(pars,dt,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag)
+			return True
+		except RuntimeError:
+			print "Warning: TTVFast did not generate the expected number of transits!"
+			print "Trying once more with smaller time step: ",
+			try:
+				self._TTVFast(pars,dt/3.,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag)
+				print "Succeeded"
+				return True
+			except RuntimeError:
+				print "Failed"
+				return False
 #
 class TTVCompute(object):
 	def __init__(self):
 		self.interface = libwrapper()
 
-	def TransitTimes(self,tfin,planet_params,GM=1.0,t0=0.0,input_type='astro',dtfrac=0.025):
-		"""Get transit times from a TTVFast N-body integration """
+	def TransitTimes(self,tfin,planet_params,GM=1.0,t0=0.0,input_type='astro',dtfrac=0.02):
+		"""Get transit times from a TTVFast N-body integration.
+		:param planet_params: an N-planet by 7 array, with each entry in the form:
+			[mass, period, e, i, Node, Peri, Mean Anomaly ]"""
 		input_types = ['jacobi','astro','cartesian']
 		assert input_type in  input_types, "Invalid input type, valid choised are: '%s', '%s', or '%s'"%(input_types[0],input_types[1],input_types[2])
 		input_n = input_types.index(input_type)
@@ -127,27 +141,34 @@ class TTVCompute(object):
 
 		dt = dtfrac * np.min(periods)
 		
-		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) ))
+		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) )) + 1
 		
 		model = (n_events * CALCTRANSIT)()
 		for transit in model:
 			transit.time = DEFAULT_TRANSIT
 			
-		self.interface.TTVFast(params,dt,t0,tfin,nplanets,model,None,0,n_events, input_n)
+		success = self.interface.TTVFast(params,dt,t0,tfin,nplanets,model,None,0,n_events, input_n)
 		transits = np.array([ ( transit.planet,transit.time ) for transit in model if transit.time != DEFAULT_TRANSIT ])
 		
 		transitlists = []
 		for i in range(nplanets):
 			condition=transits[:,0]==i
 			transitlists.append((transits[:,1])[condition])
-		return transitlists
+		return transitlists,success
 			
 def linefit(x,y):
 	assert len(x) == len(y), "Cannot fit line with different length dependent and independent variable data!"
 	const = np.ones(len(y))
 	A = np.vstack([const,x]).T
 	return np.linalg.lstsq(A,y)[0]
-
+def residplot(data):
+	n = np.arange(len(data))
+	t0,p= linefit(n, data)
+	pl.figure()
+	pl.plot(data, data - p * n - t0)
+	pl.show()
+	return t0,p
+	
 class TTVFitness(TTVCompute):
 	"""
 	A class for evaluating the chi-squared fitness of sets of orbital parameters in reproducing a set of observed transit times.
@@ -190,8 +211,8 @@ class TTVFitness(TTVCompute):
 		Omegas = np.zeros(self.nplanets)
 		
 		input = np.vstack([masses,periods,eccs,incs,Omegas,arg_peri,meanAnoms]).T
-		nbody_transits = self.TransitTimes(self.tFin, input, input_type='jacobi', t0 = t0 )
-		return nbody_transits
+		nbody_transits,success = self.TransitTimes(self.tFin, input, input_type='jacobi', t0 = t0 )
+		return nbody_transits,success
 
 	def CoplanarParametersFitness(self,params,convert_periods=False):
 		"""\nReturn the chi-squared fitness of transit times of a coplanar planet system generated from
@@ -204,7 +225,9 @@ class TTVFitness(TTVCompute):
 		if convert_periods:
 			assert self.nplanets==2, "Period conversion currently only supported for 2 planets!"
 			params = PeriodConversion(params)
-		nbody_transits = self.CoplanarParametersTransits(params)
+		nbody_transits,success = self.CoplanarParametersTransits(params)
+		if not success:
+			return -np.inf
 		chi2 = 0.0
 
 		for i in range(self.nplanets):
@@ -276,7 +299,7 @@ class TTVFitness(TTVCompute):
 		iclist[:,(3,8)] = periods
 		return iclist
 	def PlotTTV(self,params):
-		transits = self.CoplanarParametersTransits(params)
+		transits,success = self.CoplanarParametersTransits(params)
 		otransits = self.transit_times
 		pl.figure()
 		color_pallette = ['b','r','g']
@@ -307,8 +330,10 @@ class TTVFitness(TTVCompute):
 		other_planets_params = np.hstack((other_planets_params[:,:4],other_planets_meanAnoms))
 		nbody_params = np.append( first_planet_params, other_planets_params)
 
-		nbody_transits = self.CoplanarParametersTransits(nbody_params,t0=0.0)
-		
+		nbody_transits,success = self.CoplanarParametersTransits(nbody_params,t0=0.0)
+		if not success:
+			return -np.inf
+			
 		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])
 		
 		for i in range(self.nplanets):
@@ -356,6 +381,11 @@ class TTVFitness(TTVCompute):
 		
 		return np.append(shaped_params[0,:3],shaped_params[1:])
 
+bad_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
+				[9.87796689e-06,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
+good_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
+				[9.87796689e-07,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
+nbody_compute = TTVCompute()
 if __name__=="__main__":
 	
 	mass=1.e-5
@@ -377,11 +407,11 @@ if __name__=="__main__":
 	els2[4:] *= 180. / np.pi
 
 	nbody_create = TTVCompute()
-	transits1,transits2 = nbody_create.TransitTimes(100.,np.array([els1,els2]),input_type='jacobi')
-
+	transits,success = nbody_create.TransitTimes(100.,np.array([els1,els2]),input_type='jacobi')
+	transits1,transits2 = transits
 	noise_lvl = 5.e-4
-	input_data =np.array([ (i,t+random.randn()*noise_lvl,noise_lvl) for i,t in enumerate(transits1) ])
-	input_data1 =np.array([ (i,t+random.randn()*noise_lvl,noise_lvl) for i,t in enumerate(transits2) ])
+	input_data =np.array([ [i,t+np.random.randn()*noise_lvl,noise_lvl] for i,t in enumerate(transits1) ])
+	input_data1 =np.array([ [i,t+np.random.randn()*noise_lvl,noise_lvl] for i,t in enumerate(transits2) ])
 	savetxt("./inner.ttv",input_data)
 	savetxt("./outer.ttv",input_data1)
 	savetxt("inputs.txt",np.array([els1,els2]))
