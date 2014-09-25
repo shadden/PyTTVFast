@@ -11,6 +11,8 @@
 #define TOLERANCE 1e-10
 #define MAX_ITER 35
 #define BAD_TRANSIT -1
+#define ERROR -1
+#define SUCCESS 0
 int bad_transit_flag;
 PhaseState rp[MAX_N_PLANETS];    /* real coordinates */
 PhaseState p[MAX_N_PLANETS];     /* map coordinates */
@@ -46,11 +48,12 @@ double dt;
 int n_planets;
 double Time;
 double machine_epsilon;
+#include "ttvfast.h"
 #include "ttv-map-jacobi.c"
 #include "kepcart2.c"
 #include "machine-epsilon.c"
 
-void TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcTransit *transit,CalcRV *RV_struct, int nRV, int n_events, int input_flag)
+int TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcTransit *transit,CalcRV *RV_struct, int nRV, int n_events, int input_flag)
 {
   n_planets=n_plan;
   int  planet;
@@ -81,7 +84,8 @@ void TTVFast(double *params,double dt, double Time, double total,int n_plan,Calc
   }
   if(input_flag !=0 && input_flag !=1 && input_flag !=2){
     printf("Input flag must be 0,1, or 2. \n");
-    exit(-1);
+    //exit(-1);
+    return ERROR;
   }
   
   copy_system(p, rp);
@@ -229,19 +233,21 @@ void TTVFast(double *params,double dt, double Time, double total,int n_plan,Calc
 	  k++;
 	}else{
 	  printf("Not enough memory allocated for Transit structure: more events triggering as transits than expected. Possibily indicative of larger problem.\n");
-	  exit(-1);
+	  //exit(-1);
+	  return ERROR;
 	}
       }
       
       prev_dot[i]=curr_dot[i];      
     }
   }
+  return SUCCESS;
 }
 
 
 
 
-read_jacobi_planet_elements(params)
+void read_jacobi_planet_elements(params)
      double *params;
 {
   int planet;
@@ -296,7 +302,7 @@ read_jacobi_planet_elements(params)
 
 
 
-read_helio_planet_elements(params)
+void read_helio_planet_elements(params)
      double *params;
 {
   int planet;
@@ -354,7 +360,7 @@ read_helio_planet_elements(params)
 }
 
 
-read_helio_cartesian_params(params)
+void read_helio_cartesian_params(params)
 double *params;
 {
   int planet;

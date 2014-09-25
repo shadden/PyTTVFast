@@ -90,7 +90,13 @@ class libwrapper(object):
 		self._TTVFast = self.lib.TTVFast
 		self._TTVFast.argtypes =[p1d,c_double,c_double,c_double,c_int,POINTER(CALCTRANSIT)\
 		 , POINTER(CALCRV), c_int, c_int, c_int]
-		self._TTVFast.restype = None
+		self._TTVFast.restype = c_int
+		def check_errors(ret, func, args):
+			if ret<0:
+				print args
+				raise RuntimeError("TTVFast returned errors for the above arguments")
+			return ret
+		self._TTVFast.errcheck = check_errors
 	def TTVFast(self,pars,dt,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag):
 		self._TTVFast(pars,dt,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag)
 #
@@ -378,6 +384,7 @@ if __name__=="__main__":
 	input_data1 =np.array([ (i,t+random.randn()*noise_lvl,noise_lvl) for i,t in enumerate(transits2) ])
 	savetxt("./inner.ttv",input_data)
 	savetxt("./outer.ttv",input_data1)
+	savetxt("inputs.txt",np.array([els1,els2]))
 	
 	nbody_fit = TTVFitness([input_data,input_data1])
 	errorbar(input_data[:,1],input_data[:,1] - input_data[:,0]*nbody_fit.period_estimates[0]-nbody_fit.tInit_estimates[0] ,yerr=input_data[:,2])
@@ -390,6 +397,7 @@ if __name__=="__main__":
 	dL =np.mod((els2[-1] + els2[-2] - els1[-1] - els1[-2]) *np.pi / 180.,2*np.pi)
 	print "dL: %.2f"%dL
 	newpars = np.array([els1[0],ex,ey,els2[0],ex1,ey1,pratio,dL])
-	l,pars=nbody_fit.CoplanarParametersFitness2(newpars,plot=True)
+	l=nbody_fit.CoplanarParametersFitness2(newpars,plot=True)
+	savetxt("pars.txt",newpars.reshape(-1,1))
 	ics = nbody_fit.GenerateRandomInitialConditions(np.array([els1[0],els2[0]]),0.005,np.array([[ex,ey],[ex1,ey1]]),0.001,100)
 	ics = np.array([nbody_fit.convert_params(ic) for ic in ics])

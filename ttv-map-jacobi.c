@@ -2,7 +2,7 @@
 
 //This file holds all the auxiliary files for the integration, including the Kepler step, the kick step, transit time solver employing Newton's method, transit time finder employing the bisection method, the symplectic corrector sub routines, etc.
 
-int kepler_step(double gm, double dt, PhaseState *s0, PhaseState *s,int planet)
+void kepler_step(double gm, double dt, PhaseState *s0, PhaseState *s,int planet)
 {
   
   double r0, v0s, u, a, n, ecosE0, esinE0;
