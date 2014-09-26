@@ -4,8 +4,8 @@ import matplotlib.pyplot as pl
 from scipy.optimize import minimize,curve_fit
 
 DEFAULT_TRANSIT = -1
-LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
-#LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
+#LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
+LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
 PLOTS = False
 
 
