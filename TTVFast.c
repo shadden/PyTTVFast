@@ -11,7 +11,7 @@
 #define TOLERANCE 1e-10
 #define MAX_ITER 35
 #define BAD_TRANSIT -1
-#define ERROR -1
+#define FAILURE -1
 #define SUCCESS 0
 int bad_transit_flag;
 PhaseState rp[MAX_N_PLANETS];    /* real coordinates */
@@ -85,7 +85,7 @@ int TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcT
   if(input_flag !=0 && input_flag !=1 && input_flag !=2){
     printf("Input flag must be 0,1, or 2. \n");
     //exit(-1);
-    return ERROR;
+    return FAILURE;
   }
   
   copy_system(p, rp);
@@ -103,7 +103,8 @@ int TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcT
   while(Time < total){
     copy_system(p, p_tmp);
     B(p,dt);
-    A(p,dt);
+    if( A(p,dt) != SUCCESS)
+	return FAILURE;
     Time+=dt;
     /* Calculate RV if necessary */
 
@@ -140,8 +141,10 @@ int TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcT
 	bad_transit_flag = 0;
 	copy_system(p,p_ahead);
 	copy_system(p_tmp,p_behind);    
-	A(p_ahead,-dt2);
-	A(p_behind,-dt2);
+	if (A(p_ahead,-dt2) != SUCCESS)
+		return FAILURE ;
+	if (A(p_behind,-dt2) !=SUCCESS)
+		return FAILURE ;
 	jacobi_heliocentric(p_behind,helioBehind,GMsun,GM);	  
 	jacobi_heliocentric(p_ahead,helioAhead,GMsun,GM);
 	
@@ -184,7 +187,8 @@ int TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcT
 	  copy_system(helioAhead,helioBehind);
 	  copy_system(p,p_ahead);
 	  B(p_ahead,dt);
-	  A(p_ahead,dt2);
+	  if (A(p_ahead,dt2) != SUCCESS)
+		return FAILURE;
 	  TimeA=Time+dt;
 	  TimeB = Time;
 	  jacobi_heliocentric(p_ahead,helioAhead,GMsun,GM);
@@ -234,7 +238,7 @@ int TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcT
 	}else{
 	  printf("Not enough memory allocated for Transit structure: more events triggering as transits than expected. Possibily indicative of larger problem.\n");
 	  //exit(-1);
-	  return ERROR;
+	  return FAILURE;
 	}
       }
       
