@@ -310,34 +310,41 @@ class TTVFitness(TTVCompute):
 			pl.plot(transits[i],transits[i] - per * np.arange(len(transits[i])) - tInit,'%so'%col) 
 			pl.errorbar(otransits[i],otransits[i] - per * self.transit_numbers[i] - tInit,fmt='%ss'%col,yerr=self.transit_uncertainties[i])
 
-	def CoplanarParametersFitness2(self,params,plot=False):
-		"""\nReturn the chi-squared fitness of transit times of a coplanar planet system generated from
+class TTVFitnessAdvanced(TTVFitness):
+	"""
+	A class for evaluating the chi-squared fitness of sets of orbital parameters in reproducing a set of observed transit times.
+	TTVFitnessAdvanced overwrites the 'CoplanarParametersFitness' of the TTVFitness class by re-parameterizing periods and Mean
+	Anomolies.
+	"""	
+	def CoplanarParametersFitness(self,params):
+		"""
+		Return the chi-squared fitness of transit times of a coplanar planet system generated from
 		 the given set of 'params'. 'params' should be an (Nx5)-2 array, where N is the number of planets.
 		 Once generated, the transit times will be transformed using linear least-squares to solve for a
 		 rescaling factor and time offset.  This allows periods to be represented relative to the period 
 		 of the innermost planet and initial angular positions expressed relative to the initial angular 
-		 position of the innermost planet, thus reducing the free parameters by 2 when model-fitting."""
+		 position of the innermost planet, thus reducing the free parameters by 2 when model-fitting.
+		"""
+		masses_and_evecs = params[:3*self.nplanets].reshape(-1,3)
+		mass = masses_and_evecs[:,0]
+		ex,ey = masses_and_evecs[:,1],masses_and_evecs[:,2]
+		pmgs = np.arctan2(ey,ex)
 		
-		first_planet_pmg = np.arctan2(params[2],params[1])
-		first_planet_L = 0.0
-		first_planet_params = np.append(params[:3],np.array(( 1.0, first_planet_L - first_planet_pmg )) )
-		
-		other_planets_params = params[3:].reshape(-1,5)
-		
-		other_planets_L = other_planets_params[:,4]
-		other_planets_pmg = np.arctan2(other_planets_params[:,2],other_planets_params[:,1])
-		other_planets_meanAnoms = (other_planets_L - other_planets_pmg).reshape(-1,1)
-		other_planets_params = np.hstack((other_planets_params[:,:4],other_planets_meanAnoms))
-		nbody_params = np.append( first_planet_params, other_planets_params)
+		other_params = params[3*self.nplanets:].reshape(-1,2)
+		periodRatios = np.append(np.array([1.0]), other_params[:,0])
+		meanLongs = np.append(np.array([0.0]), other_params[:,1])		
+
+		nbody_params = (np.vstack([ mass,ex,ey,periodRatios,meanLongs-pmgs ]).T).reshape(-1)
 
 		nbody_transits,success = self.CoplanarParametersTransits(nbody_params,t0=0.0)
+
 		if not success:
 			return -np.inf
 			
 		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])
 		
 		for i in range(self.nplanets):
-			if max(self.transit_numbers[i]) > len(nbody_transits[i]):
+			if max(self.transit_numbers[i]) >= len(nbody_transits[i]):
 				return -np.inf
 
 			observed_times=np.append(observed_times, self.transit_times[i])
@@ -347,44 +354,41 @@ class TTVFitness(TTVCompute):
 		
 		def func(x,tau,t0):
 			return tau * x + t0
+
+		# Solve for the transform of N-body time that gives the best fit to observed transits
 		x0 = np.array((self.period_estimates[0],self.tInit_estimates[0]))
 		tau,t0 = curve_fit(func, nbody_times, observed_times,x0, uncertainties)[0]
+		
 		transform = np.vectorize(lambda x: func(x,tau,t0))
 		
-
-		if plot:
-			figure()
-			p1 = subplot(211)
-			p2 = subplot(212)
-			for i in range(self.nplanets):
-				col = ['b','r'][i%2]
-				p1.plot(transform((nbody_transits[i])[self.transit_numbers[i]]),'%sx'%col)
-				p1.plot(self.transit_times[i],'%so'%col)
-				diff = transform((nbody_transits[i])[self.transit_numbers[i]]) - self.transit_times[i]
-				p2.plot(self.transit_times[i],diff,'%ss'%col)
-			show() 
 		chi2 = 0.0
 		
 		for i in range(self.nplanets):
 			uncertainties = self.transit_uncertainties[i]
 			diff = transform((nbody_transits[i])[self.transit_numbers[i]]) - self.transit_times[i]
 			chi2+= -0.5 * np.sum( np.power(diff,2.) / np.power(uncertainties,2.) )
-		return chi2
-	
-	def convert_params(self,params):
-		shaped_params = params.reshape(-1,5)
-		# Scale periods by first planet period
-		shaped_params[:,3] /= shaped_params[0,3]
-		# Convert mean anomalies to mean longitudes
-		shaped_params[:,4] += np.arctan2(shaped_params[:,2],shaped_params[:,1])
-		shaped_params[:,4] = np.mod(shaped_params[:,4]+np.pi,2*np.pi)-np.pi
-		
-		return np.append(shaped_params[0,:3],shaped_params[1:])
 
+		return chi2
+
+	def convert_params(self,params):
+		""" 
+		Convert old parameter format to new parameters (expressed relative to innermost planet)
+		"""
+		shaped_params = params.reshape(-1,5)
+		pars = shaped_params[:,(0,1,2)].reshape(-1)
+		
+		period = shaped_params[1:,3]/shaped_params[0,3] 
+		meanLong = np.mod(shaped_params[1:,4] - shaped_params[0,4] + np.pi,2*np.pi) - np.pi	
+		
+		return np.append(pars, np.vstack((period,meanLong)).T.reshape(-1) )
+		
+
+	
 bad_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
 				[9.87796689e-06,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
 good_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
 				[9.87796689e-07,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
+				
 nbody_compute = TTVCompute()
 if __name__=="__main__":
 	
@@ -416,18 +420,19 @@ if __name__=="__main__":
 	savetxt("./outer.ttv",input_data1)
 	savetxt("inputs.txt",np.array([els1,els2]))
 	
-	nbody_fit = TTVFitness([input_data,input_data1])
-	errorbar(input_data[:,1],input_data[:,1] - input_data[:,0]*nbody_fit.period_estimates[0]-nbody_fit.tInit_estimates[0] ,yerr=input_data[:,2])
-	errorbar(input_data1[:,1],input_data1[:,1] - input_data1[:,0]*nbody_fit.period_estimates[1]-nbody_fit.tInit_estimates[1] ,yerr=input_data1[:,2])
-	show()
+	nbody_fit = TTVFitnessAdvanced([input_data,input_data1])
 	
-	ex,ey = els1[2] * np.array([np.cos(els1[5]* np.pi/180.),np.sin(els1[5]* np.pi/180.)])
-	ex1,ey1 = els2[2] * np.array([np.cos(els2[5]* np.pi/180.),np.sin(els2[5]* np.pi/180.)])
-	pratio = els2[1]/els1[1]
-	dL =np.mod((els2[-1] + els2[-2] - els1[-1] - els1[-2]) *np.pi / 180.,2*np.pi)
-	print "dL: %.2f"%dL
-	newpars = np.array([els1[0],ex,ey,els2[0],ex1,ey1,pratio,dL])
-	l=nbody_fit.CoplanarParametersFitness2(newpars,plot=True)
-	savetxt("pars.txt",newpars.reshape(-1,1))
-	ics = nbody_fit.GenerateRandomInitialConditions(np.array([els1[0],els2[0]]),0.005,np.array([[ex,ey],[ex1,ey1]]),0.001,100)
-	ics = np.array([nbody_fit.convert_params(ic) for ic in ics])
+# 	errorbar(input_data[:,1],input_data[:,1] - input_data[:,0]*nbody_fit.period_estimates[0]-nbody_fit.tInit_estimates[0] ,yerr=input_data[:,2])
+# 	errorbar(input_data1[:,1],input_data1[:,1] - input_data1[:,0]*nbody_fit.period_estimates[1]-nbody_fit.tInit_estimates[1] ,yerr=input_data1[:,2])
+# 	show()
+# 	
+# 	ex,ey = els1[2] * np.array([np.cos(els1[5]* np.pi/180.),np.sin(els1[5]* np.pi/180.)])
+# 	ex1,ey1 = els2[2] * np.array([np.cos(els2[5]* np.pi/180.),np.sin(els2[5]* np.pi/180.)])
+# 	pratio = els2[1]/els1[1]
+# 	dL =np.mod((els2[-1] + els2[-2] - els1[-1] - els1[-2]) *np.pi / 180.,2*np.pi)
+# 	print "dL: %.2f"%dL
+# 	newpars = np.array([els1[0],ex,ey,els2[0],ex1,ey1,pratio,dL])
+# 	l=nbody_fit.CoplanarParametersFitness2(newpars,plot=True)
+# 	savetxt("pars.txt",newpars.reshape(-1,1))
+# 	ics = nbody_fit.GenerateRandomInitialConditions(np.array([els1[0],els2[0]]),0.005,np.array([[ex,ey],[ex1,ey1]]),0.001,100)
+# 	ics = np.array([nbody_fit.convert_params(ic) for ic in ics])
