@@ -1,8 +1,8 @@
 /*If you make use of this code, please cite Deck, Agol, Holman & Nesvorny, 2014 */
 
 //This file holds all the auxiliary files for the integration, including the Kepler step, the kick step, transit time solver employing Newton's method, transit time finder employing the bisection method, the symplectic corrector sub routines, etc.
-
-void kepler_step(double gm, double dt, PhaseState *s0, PhaseState *s,int planet)
+#include "ttvfast.h"
+int kepler_step(double gm, double dt, PhaseState *s0, PhaseState *s,int planet)
 {
   
   double r0, v0s, u, a, n, ecosE0, esinE0;
@@ -21,7 +21,8 @@ void kepler_step(double gm, double dt, PhaseState *s0, PhaseState *s,int planet)
 
   if(a<0.0) {
     printf("hyperbolic orbit %lf\n", a);
-    exit(-1);
+    //exit(-1);
+    return FAILURE;
   }
 
   n = sqrt(gm/(a*a*a));
@@ -75,7 +76,8 @@ void kepler_step(double gm, double dt, PhaseState *s0, PhaseState *s,int planet)
 
   if(count==MAX_ITER){
     printf("Kepler step not converging in MAX_ITER. Likely need a smaller dt\n");
-    exit(-1);
+    //exit(-1);
+    return FAILURE;
   }
 
   guess[planet][0]=guess[planet][1];
@@ -101,6 +103,7 @@ void kepler_step(double gm, double dt, PhaseState *s0, PhaseState *s,int planet)
   s->yd = fdot*s0->y + gdot*s0->yd;
   s->zd = fdot*s0->z + gdot*s0->zd;
 
+  return SUCCESS;
 }
 
 double kepler_transit_locator(double gm, double dt,  PhaseState *s0, PhaseState *s)
@@ -405,16 +408,18 @@ void compute_corrector_coefficientsTO(double dt)
 
 
 
-void A(PhaseState p[],  double dt)
+int A(PhaseState p[],  double dt)
 {
   PhaseState tmp;
   int planet;
   void copy_state(PhaseState *s1,  PhaseState *s2);
 
   for(planet=0; planet<n_planets; planet++) {
-    kepler_step(kc[planet], dt, &p[planet], &tmp,planet);
+    if (kepler_step(kc[planet], dt, &p[planet], &tmp,planet) != SUCCESS )
+	return FAILURE;
     copy_state(&tmp, &p[planet]);
   }
+  return SUCCESS;
 }
 
 void B(PhaseState p[], double dt)
