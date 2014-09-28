@@ -110,7 +110,7 @@ class libwrapper(object):
 				return True
 			except RuntimeError:
 				print "Failed"
-				print "Parameters: ", " ".join( map(lambda x: ".3f"%x, pars[2:]))
+				print "Parameters: ", " ".join( map(lambda x: "%.3f"%x, pars[2:]))
 				return False
 #
 class TTVCompute(object):
@@ -134,13 +134,18 @@ class TTVCompute(object):
 		
 		if input_n==0 or input_n==1:
 			periods = planet_params[:,1]
+			eccs = planet_params[:,2]
 		else:
 			vel2 = np.linalg.norm(planet_params[:,3:],axis=1)**2
 			r	= np.linalg.norm(planet_params[:,:3],axis=1)**2
 			GM_a = -2 * ( 0.5 * vel2 - GM /r )
 			periods = 2 * pi * np.power( GM_a  , -1.5 ) * GM
 
-		dt = dtfrac * np.min(periods)
+			# this should be fixed!
+			eccs = np.zeros(nplanets)
+			
+
+		dt = dtfrac * np.min(periods * np.pow( (1. - eccs ) ,1.5) )
 		
 		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) )) + 1
 		
@@ -149,11 +154,15 @@ class TTVCompute(object):
 			transit.time = DEFAULT_TRANSIT
 			
 		success = self.interface.TTVFast(params,dt,t0,tfin,nplanets,model,None,0,n_events, input_n)
-		transits = np.array([ ( transit.planet,transit.time ) for transit in model if transit.time != DEFAULT_TRANSIT ])
+		if not success:
+			return [],False
 		
+		transits = np.array([ ( transit.planet,transit.time ) for transit in model if transit.time != DEFAULT_TRANSIT ])
+		if len(transits)==0:
+			return [],False
 		transitlists = []
 		for i in range(nplanets):
-			condition=transits[:,0]==i
+			condition= transits[:,0] == i
 			transitlists.append((transits[:,1])[condition])
 		return transitlists,success
 			
@@ -400,7 +409,7 @@ class TTVFitnessAdvanced(TTVFitness):
 		nbody_transits,success = self.CoplanarParametersTransits(nbody_params,t0=0.0)
 
 		if not success:
-			return array([]), success
+			return np.array([]), success
 			
 		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])	
 		for i in range(self.nplanets):

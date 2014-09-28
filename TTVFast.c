@@ -98,13 +98,14 @@ int TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcT
 
   }
 
-  A(p, dt2);
+  if (A(p, dt2) != SUCCESS)
+  	return FAILURE;
 
   while(Time < total){
     copy_system(p, p_tmp);
     B(p,dt);
     if( A(p,dt) != SUCCESS)
-	return FAILURE;
+		return FAILURE;
     Time+=dt;
     /* Calculate RV if necessary */
 
@@ -115,14 +116,16 @@ int TTVFast(double *params,double dt, double Time, double total,int n_plan,CalcT
 	if(RVTime-(RV_struct+j)->time > (RV_struct+j)->time-(RVTime-dt)){
 	  copy_system(p_tmp,p_RV);
 	  new_dt= (RV_struct+j)->time-(RVTime-dt);
-	  A(p_RV,new_dt);
+	  if( A(p,dt) != SUCCESS)
+		return FAILURE;
 	  velocity = compute_RV(p_RV);
 	  (RV_struct+j)->RV =velocity;
 	  
 	}else{
 	  copy_system(p,p_RV);
 	  new_dt= (RV_struct+j)->time-RVTime;
-	  A(p_RV,new_dt);
+	  if( A(p,dt) != SUCCESS)
+		return FAILURE;
 	  velocity = compute_RV(p_RV);
 	  (RV_struct+j)->RV =velocity;
 	}

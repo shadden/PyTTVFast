@@ -416,7 +416,7 @@ int A(PhaseState p[],  double dt)
 
   for(planet=0; planet<n_planets; planet++) {
     if (kepler_step(kc[planet], dt, &p[planet], &tmp,planet) != SUCCESS )
-	return FAILURE;
+		return FAILURE;
     copy_state(&tmp, &p[planet]);
   }
   return SUCCESS;
