@@ -110,6 +110,7 @@ class libwrapper(object):
 				return True
 			except RuntimeError:
 				print "Failed"
+				print "Parameters: ", " ".join( map(lambda x: ".3f"%x, pars[2:]))
 				return False
 #
 class TTVCompute(object):
@@ -316,6 +317,12 @@ class TTVFitnessAdvanced(TTVFitness):
 	TTVFitnessAdvanced overwrites the 'CoplanarParametersFitness' of the TTVFitness class by re-parameterizing periods and Mean
 	Anomolies.
 	"""	
+	def __init__(self,observed_transit_data):
+		super(TTVFitnessAdvanced, self).__init__(observed_transit_data)
+		self.t0 = 0.0
+		self.pratios = self.period_estimates / np.min(self.period_estimates)
+		self.tFin = np.max([ np.max(times) for times in self.transit_times ]) / np.min(self.period_estimates) + 1.1 * max(self.pratios) 
+		
 	def CoplanarParametersFitness(self,params):
 		"""
 		Return the chi-squared fitness of transit times of a coplanar planet system generated from
@@ -369,7 +376,53 @@ class TTVFitnessAdvanced(TTVFitness):
 			chi2+= -0.5 * np.sum( np.power(diff,2.) / np.power(uncertainties,2.) )
 
 		return chi2
+		
+	def CoplanarParametersTransformedTransits(self,params):
+		"""
+		Return the chi-squared fitness of transit times of a coplanar planet system generated from
+		 the given set of 'params'. 'params' should be an (Nx5)-2 array, where N is the number of planets.
+		 Once generated, the transit times will be transformed using linear least-squares to solve for a
+		 rescaling factor and time offset.  This allows periods to be represented relative to the period 
+		 of the innermost planet and initial angular positions expressed relative to the initial angular 
+		 position of the innermost planet, thus reducing the free parameters by 2 when model-fitting.
+		"""
+		masses_and_evecs = params[:3*self.nplanets].reshape(-1,3)
+		mass = masses_and_evecs[:,0]
+		ex,ey = masses_and_evecs[:,1],masses_and_evecs[:,2]
+		pmgs = np.arctan2(ey,ex)
+		
+		other_params = params[3*self.nplanets:].reshape(-1,2)
+		periodRatios = np.append(np.array([1.0]), other_params[:,0])
+		meanLongs = np.append(np.array([0.0]), other_params[:,1])		
 
+		nbody_params = (np.vstack([ mass,ex,ey,periodRatios,meanLongs-pmgs ]).T).reshape(-1)
+
+		nbody_transits,success = self.CoplanarParametersTransits(nbody_params,t0=0.0)
+
+		if not success:
+			return array([]), success
+			
+		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])	
+		for i in range(self.nplanets):
+			if max(self.transit_numbers[i]) >= len(nbody_transits[i]):
+				return array([]),False
+
+			observed_times=np.append(observed_times, self.transit_times[i])
+			observed_numbers=np.append(observed_numbers, self.transit_numbers[i])
+			uncertainties=np.append(uncertainties,self.transit_uncertainties[i])
+			nbody_times=np.append(nbody_times , (nbody_transits[i])[self.transit_numbers[i]])
+		
+		def func(x,tau,t0):
+			return tau * x + t0
+
+		# Solve for the transform of N-body time that gives the best fit to observed transits
+		x0 = np.array((self.period_estimates[0],self.tInit_estimates[0]))
+		tau,t0 = curve_fit(func, nbody_times, observed_times,x0, uncertainties)[0]
+		
+		transform = np.vectorize(lambda x: func(x,tau,t0))
+		
+		return [ transform(x) for x in (nbody_transits)],True
+		
 	def convert_params(self,params):
 		""" 
 		Convert old parameter format to new parameters (expressed relative to innermost planet)
@@ -382,13 +435,25 @@ class TTVFitnessAdvanced(TTVFitness):
 		
 		return np.append(pars, np.vstack((period,meanLong)).T.reshape(-1) )
 		
-
+	def CoplanarParametersTTVPlot(self,params):
+		"""Plot the TTVs of a set of input parameters against the observed TTVs"""
+		transits,success = self.CoplanarParametersTransformedTransits(params)
+		assert success, "Failed to generate TTVs from specified parameters!"
+		otransits = self.transit_times
+		pl.figure()
+		color_pallette = ['b','r','g']
+		for i in range(self.nplanets):
+			col = color_pallette[i%len(color_pallette)]
+			per = self.period_estimates[i]
+			tInit = self.tInit_estimates[i]
+			pl.plot(transits[i],transits[i] - per * np.arange(len(transits[i])) - tInit,'%so'%col) 
+			pl.errorbar(otransits[i],otransits[i] - per * self.transit_numbers[i] - tInit,fmt='%ss'%col,yerr=self.transit_uncertainties[i])
 	
 bad_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
 				[9.87796689e-06,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
 good_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
-				[9.87796689e-07,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
-				
+				[9.87796689e-07,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])		
+
 nbody_compute = TTVCompute()
 if __name__=="__main__":
 	
