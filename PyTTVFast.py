@@ -145,7 +145,7 @@ class TTVCompute(object):
 			eccs = np.zeros(nplanets)
 			
 
-		dt = dtfrac * np.min(periods * np.pow( (1. - eccs ) ,1.5) )
+		dt = dtfrac * np.min(periods * np.power( (1. - eccs ) ,1.5) )
 		
 		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) )) + 1
 		
