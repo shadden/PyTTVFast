@@ -110,7 +110,7 @@ class libwrapper(object):
 				return True
 			except RuntimeError:
 				print "Failed"
-				print "Parameters: ", " ".join( map(lambda x: "%.3f"%x, pars[2:]))
+				print "Parameters: ", " ".join( map(lambda x: "%.3g"%x, pars[2:]))
 				return False
 #
 class TTVCompute(object):
@@ -144,9 +144,9 @@ class TTVCompute(object):
 			# this should be fixed!
 			eccs = np.zeros(nplanets)
 			
-
-		dtfactor =  np.power( (1. - eccs ) ,1.5)
-		dt = dtfrac * np.min( periods * dtfactor )
+		# Don't let the periapse set timestep less than 1/10th the planet period
+		dtfactors =  np.maximum( np.power( (1. - eccs ) ,1.5) , 0.1 )
+		dt = dtfrac * np.min( periods * dtfactors )
 		
 		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) )) + 1
 		
