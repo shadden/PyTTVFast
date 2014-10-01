@@ -144,9 +144,14 @@ class TTVCompute(object):
 			# this should be fixed!
 			eccs = np.zeros(nplanets)
 			
+<<<<<<< HEAD
 		# Don't let the periapse set timestep less than 1/10th the planet period
 		dtfactors =  np.maximum( np.power( (1. - eccs ) ,1.5) , 0.1 )
 		dt = dtfrac * np.min( periods * dtfactors )
+=======
+
+		dt = dtfrac * np.min(periods * np.power( (1. - eccs ) ,1.5) )
+>>>>>>> 24160e279c6048422e62c992503d48873ede50ac
 		
 		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) )) + 1
 		
@@ -306,9 +311,12 @@ class TTVFitness(TTVCompute):
 		mass_list = masses * (1. + sigma_dm_m * np.random.randn(N,self.nplanets) )
 		evecs_list = evecs  +  sigma_e * np.random.randn(N,self.nplanets,2)
 		iclist = np.array(self.GenerateInitialConditions(mass_list,evecs_list,lazy=True))
+		
 		periods = iclist.reshape(N,-1,5)[:,:,3] * (1.+1.e-4*np.random.randn(N,self.nplanets)) 
-		iclist[:,(3,8)] = periods
+		period_indices = tuple([3+5*n for n in range(self.nplanets)])
+		iclist[:,period_indices] = periods
 		return iclist
+
 	def PlotTTV(self,params):
 		transits,success = self.CoplanarParametersTransits(params)
 		otransits = self.transit_times
@@ -458,7 +466,8 @@ class TTVFitnessAdvanced(TTVFitness):
 			tInit = self.tInit_estimates[i]
 			pl.plot(transits[i],transits[i] - per * np.arange(len(transits[i])) - tInit,'%so'%col) 
 			pl.errorbar(otransits[i],otransits[i] - per * self.transit_numbers[i] - tInit,fmt='%ss'%col,yerr=self.transit_uncertainties[i])
-	
+		return transits
+		
 bad_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
 				[9.87796689e-06,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
 good_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
@@ -467,8 +476,9 @@ good_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+
 nbody_compute = TTVCompute()
 if __name__=="__main__":
 	
+	# planet 1
 	mass=1.e-5
-	per,e,i = 1.0, 0.02, 90.
+	per,e,i = 0.4*1.0, 0.02, 90.
 	ArgPeri = np.random.rand() * 2.0 * np.pi
 	MeanAnom = -ArgPeri
 	LongNode = 0.0
@@ -477,36 +487,54 @@ if __name__=="__main__":
 
 	# planet 2
 	mass=1.e-5
-	per,e,i = 1.515, 0.03, 90.
+	per,e,i = 0.4*1.515, 0.03, 90.
 	ArgPeri= np.random.rand() * 2.0 * np.pi
 	MeanLong = np.random.rand() * 2.0 * np.pi 
 	MeanAnom = MeanLong - ArgPeri
 	LongNode = 0.0
 	els2 = np.array([mass,per,e,i,LongNode,ArgPeri,MeanAnom])
 	els2[4:] *= 180. / np.pi
+	
+	# planet 3
+	mass=1.e-5
+	per,e,i = 0.4*2*(1+0.02)*1.515, 0.03, 90.
+	ArgPeri= np.random.rand() * 2.0 * np.pi
+	MeanLong = np.random.rand() * 2.0 * np.pi 
+	MeanAnom = MeanLong - ArgPeri
+	LongNode = 0.0
+	els3 = np.array([mass,per,e,i,LongNode,ArgPeri,MeanAnom])
+	els3[4:] *= 180. / np.pi
 
 	nbody_create = TTVCompute()
-	transits,success = nbody_create.TransitTimes(100.,np.array([els1,els2]),input_type='jacobi')
-	transits1,transits2 = transits
+	transits,success = nbody_create.TransitTimes(100.,np.array([els1,els2,els3]),input_type='jacobi')
+	transits1,transits2,transits3 = transits
 	noise_lvl = 5.e-4
-	input_data =np.array([ [i,t+np.random.randn()*noise_lvl,noise_lvl] for i,t in enumerate(transits1) ])
-	input_data1 =np.array([ [i,t+np.random.randn()*noise_lvl,noise_lvl] for i,t in enumerate(transits2) ])
-	savetxt("./inner.ttv",input_data)
-	savetxt("./outer.ttv",input_data1)
-	savetxt("inputs.txt",np.array([els1,els2]))
+	input_data1 =np.array([ [i,t+np.random.randn()*noise_lvl,noise_lvl] for i,t in enumerate(transits1) ])
+	input_data2 =np.array([ [i,t+np.random.randn()*noise_lvl,noise_lvl] for i,t in enumerate(transits2) ])
+	input_data3 =np.array([ [i,t+np.random.randn()*noise_lvl,noise_lvl] for i,t in enumerate(transits3) ])
+
+	np.savetxt("./inner.ttv",input_data1)
+	np.savetxt("./middle.ttv",input_data2)
+	np.savetxt("./outer.ttv",input_data3)
+
+	np.savetxt("inputs.txt",np.array([els1,els2,els3]))
 	
-	nbody_fit = TTVFitnessAdvanced([input_data,input_data1])
+	nbody_fit = TTVFitnessAdvanced([input_data1,input_data2,input_data3])
 	
 # 	errorbar(input_data[:,1],input_data[:,1] - input_data[:,0]*nbody_fit.period_estimates[0]-nbody_fit.tInit_estimates[0] ,yerr=input_data[:,2])
 # 	errorbar(input_data1[:,1],input_data1[:,1] - input_data1[:,0]*nbody_fit.period_estimates[1]-nbody_fit.tInit_estimates[1] ,yerr=input_data1[:,2])
 # 	show()
 # 	
-# 	ex,ey = els1[2] * np.array([np.cos(els1[5]* np.pi/180.),np.sin(els1[5]* np.pi/180.)])
-# 	ex1,ey1 = els2[2] * np.array([np.cos(els2[5]* np.pi/180.),np.sin(els2[5]* np.pi/180.)])
-# 	pratio = els2[1]/els1[1]
-# 	dL =np.mod((els2[-1] + els2[-2] - els1[-1] - els1[-2]) *np.pi / 180.,2*np.pi)
+ 	ex,ey = els1[2] * np.array([np.cos(els1[5]* np.pi/180.),np.sin(els1[5]* np.pi/180.)])
+ 	ex1,ey1 = els2[2] * np.array([np.cos(els2[5]* np.pi/180.),np.sin(els2[5]* np.pi/180.)])
+ 	ex2,ey2 = els3[2] * np.array([np.cos(els3[5]* np.pi/180.),np.sin(els3[5]* np.pi/180.)])
+ 	pratio1 = els2[1]/els1[1]
+ 	pratio2 = els3[1]/els1[1]
+ 	
+ 	dL1 =np.mod((els2[-1] + els2[-2] - els1[-1] - els1[-2]) *np.pi / 180.,2*np.pi)
+ 	dL2 =np.mod((els3[-1] + els3[-2] - els1[-1] - els1[-2]) *np.pi / 180.,2*np.pi)
 # 	print "dL: %.2f"%dL
-# 	newpars = np.array([els1[0],ex,ey,els2[0],ex1,ey1,pratio,dL])
+ 	newpars = np.array([els1[0],ex,ey,els2[0],ex1,ey1,els3[0],ex2,ey2,pratio1,dL1,pratio2,dL2])
 # 	l=nbody_fit.CoplanarParametersFitness2(newpars,plot=True)
 # 	savetxt("pars.txt",newpars.reshape(-1,1))
 # 	ics = nbody_fit.GenerateRandomInitialConditions(np.array([els1[0],els2[0]]),0.005,np.array([[ex,ey],[ex1,ey1]]),0.001,100)
