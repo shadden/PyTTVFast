@@ -4,10 +4,17 @@ import matplotlib.pyplot as pl
 from scipy.optimize import minimize,curve_fit,leastsq
 
 DEFAULT_TRANSIT = -1
-LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
-#LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
-PLOTS = False
+import os
+who =os.popen("whoami") 
+if who.readline().strip() =='samuelhadden':
+	print "On laptop..."
+	LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
+else:
+	print "On Quest..."
+	LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
+who.close()
 
+PLOTS = False
 
 def get_ctype_ptr(dtype,dim,**kwargs):
 	return np.ctypeslib.ndpointer(dtype=dtype,ndim=dim,flags='C',**kwargs)
