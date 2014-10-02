@@ -1,11 +1,11 @@
 from ctypes import *
 import numpy as np
 import matplotlib.pyplot as pl
-from scipy.optimize import minimize,curve_fit
+from scipy.optimize import minimize,curve_fit,leastsq
 
 DEFAULT_TRANSIT = -1
-#LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
-LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
+LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
+#LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
 PLOTS = False
 
 
@@ -390,7 +390,7 @@ class TTVFitnessAdvanced(TTVFitness):
 
 		return chi2
 		
-	def CoplanarParametersTransformedTransits(self,params):
+	def CoplanarParametersTransformedTransits(self,params,observed_only=False):
 		"""
 		Return the chi-squared fitness of transit times of a coplanar planet system generated from
 		 the given set of 'params'. 'params' should be an (Nx5)-2 array, where N is the number of planets.
@@ -433,8 +433,15 @@ class TTVFitnessAdvanced(TTVFitness):
 		tau,t0 = curve_fit(func, nbody_times, observed_times,x0, uncertainties)[0]
 		
 		transform = np.vectorize(lambda x: func(x,tau,t0))
-		
-		return [ transform(x) for x in (nbody_transits)],True
+		if observed_only:
+			soln=[]
+			for i in range(self.nplanets):
+				nums = self.transit_numbers[i]
+				soln.append(transform(nbody_transits[i])[nums])
+			
+			return soln,True
+		else:
+			return [ transform(x) for x in (nbody_transits)],True
 		
 	def convert_params(self,params):
 		""" 
@@ -462,6 +469,30 @@ class TTVFitnessAdvanced(TTVFitness):
 			pl.plot(transits[i],transits[i] - per * np.arange(len(transits[i])) - tInit,'%so'%col) 
 			pl.errorbar(otransits[i],otransits[i] - per * self.transit_numbers[i] - tInit,fmt='%ss'%col,yerr=self.transit_uncertainties[i])
 		return transits
+
+	def CoplanarParametersTTVFit(self,params0):
+		"""Use L-M minimization to find the best-fit set of input parameters along with an estimated covariance matrix"""
+		target_data = np.array([])
+		errors = np.array([])
+		#for t in self.transit_times:
+		for i in range(self.nplanets):
+			target_data = np.append(target_data,self.transit_times[i])
+			errors = np.append(errors,self.transit_uncertainties[i])
+			
+		def objectivefn(x):
+			
+			times =  self.CoplanarParametersTransformedTransits(x,observed_only=True)[0]
+			answer = np.array([],dtype=float)
+			for t in times:
+				answer = np.append( answer,np.array(t) )
+			#
+	 
+			return (answer - target_data)/errors
+		
+		return leastsq(objectivefn, params0,full_output=1)
+		
+			
+
 		
 bad_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
 				[9.87796689e-06,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
@@ -470,7 +501,10 @@ good_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+
 
 nbody_compute = TTVCompute()
 if __name__=="__main__":
+	import glob
+	nbody_fit=TTVFitnessAdvanced([np.loadtxt(f) for f in glob.glob('KOI*.txt')])
 	
+if False:	
 	# planet 1
 	mass=1.e-5
 	per,e,i = 0.4*1.0, 0.02, 90.
