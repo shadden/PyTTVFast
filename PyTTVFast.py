@@ -117,7 +117,7 @@ class libwrapper(object):
 				return True
 			except RuntimeError:
 				print "Failed"
-				print "Parameters: ", " ".join( map(lambda x: "%.3f"%x, pars[2:]))
+				print "Parameters: ", " ".join( map(lambda x: "%.3g"%x, pars[2:]))
 				return False
 #
 class TTVCompute(object):
@@ -425,7 +425,7 @@ class TTVFitnessAdvanced(TTVFitness):
 		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])	
 		for i in range(self.nplanets):
 			if max(self.transit_numbers[i]) >= len(nbody_transits[i]):
-				return array([]),False
+				return np.array([]),False
 
 			observed_times=np.append(observed_times, self.transit_times[i])
 			observed_numbers=np.append(observed_numbers, self.transit_numbers[i])
@@ -469,7 +469,10 @@ class TTVFitnessAdvanced(TTVFitness):
 		otransits = self.transit_times
 		pl.figure()
 		color_pallette = ['b','r','g']
+		
 		for i in range(self.nplanets):
+			plnum  = 100 * self.nplanets + 10 + (i+1)
+			pl.subplot(plnum)
 			col = color_pallette[i%len(color_pallette)]
 			per = self.period_estimates[i]
 			tInit = self.tInit_estimates[i]
