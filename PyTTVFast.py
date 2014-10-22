@@ -480,6 +480,24 @@ class TTVFitnessAdvanced(TTVFitness):
 			pl.errorbar(otransits[i],otransits[i] - per * self.transit_numbers[i] - tInit,fmt='%ss'%col,yerr=self.transit_uncertainties[i])
 		return transits
 
+	def CoplanarParametersTTVResidPlot(self,params):
+		"""Plot the TTVs of a set of input parameters against the observed TTVs"""
+		transits,success = self.CoplanarParametersTransformedTransits(params)
+		assert success, "Failed to generate TTVs from specified parameters!"
+		otransits = self.transit_times
+		pl.figure()
+		color_pallette = ['b','r','g']
+		
+		for i in range(self.nplanets):
+			plnum  = 100 * self.nplanets + 10 + (i+1)
+			pl.subplot(plnum)
+			col = color_pallette[i%len(color_pallette)]
+			per = self.period_estimates[i]
+			tInit = self.tInit_estimates[i]
+			#pl.plot(transits[i],transits[i] - per * np.arange(len(transits[i])) - tInit,'%so'%col) 
+			ntrans = self.transit_numbers[i]
+			pl.errorbar(otransits[i],otransits[i] - transits[i][ntrans],fmt='%ss'%col,yerr=self.transit_uncertainties[i])
+		return transits
 	def CoplanarParametersTTVFit(self,params0):
 		"""Use L-M minimization to find the best-fit set of input parameters along with an estimated covariance matrix"""
 		target_data = np.array([])
@@ -511,8 +529,33 @@ good_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+
 
 nbody_compute = TTVCompute()
 if __name__=="__main__":
+	def linefit2(x,y,sigma=None):
+	
+		assert len(x) == len(y), "Cannot fit line with different length dependent and independent variable data!"
+		linefn = lambda x,slope,intercept: x*slope + intercept
+		return curve_fit(linefn,x,y,sigma=sigma)
+	def linefit_resids(x,y,sigma=None):
+		s,m = linefit2(x,y,sigma)[0]
+		return y - s*x -m
+	#
 	import glob
-	nbody_fit=TTVFitnessAdvanced([np.loadtxt(f) for f in glob.glob('KOI*.txt')])
+	with open('planets.txt') as fi:
+		planetNames = [l.strip() for l in fi.readlines()]
+	nbody_fit=TTVFitnessAdvanced([np.loadtxt(f) for f in planetNames])
+
+	transitTimes,sucess = nbody_fit.CoplanarParametersTransformedTransits(loadtxt('bestpars.txt'))
+	for i,times in enumerate(transitTimes):
+		noiseLvl = median(nbody_fit.transit_uncertainties[i])
+		nTimes = len(times)
+		noise = random.normal(0.,noiseLvl,nTimes)
+		
+		newData = vstack(( arange(nTimes),times+noise, noiseLvl * ones(nTimes) )).T
+		savetxt("planet%d.txt"%i,newData)
+		
+		errorbar(newData[:,1],linefit_resids(newData[:,0],newData[:,1],newData[:,2]),yerr=noiseLvl)
+	savefig('KOI620_Artificial.png')
+		
+		
 	
 if False:	
 	# planet 1
