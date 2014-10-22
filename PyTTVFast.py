@@ -205,6 +205,7 @@ class TTVFitness(TTVCompute):
 		self.transit_uncertainties = [ data[:,2] for data in observed_transit_data ] 
 		
 		self.tInit_estimates,self.period_estimates = np.array([linefit(data[:,0],data[:,1]) for data in self.observed_transit_data ]).T
+		self.transitOrder = np.argsort( np.array([tTimes[0] for tTimes in self.transit_times]) )
 		pMax = max(self.period_estimates)
 		pMin = min(self.period_estimates)
 		# Begginings and ends of integration to be a little more than a full period of the longest period
@@ -364,9 +365,20 @@ class TTVFitnessAdvanced(TTVFitness):
 		nbody_params = (np.vstack([ mass,ex,ey,periodRatios,meanLongs-pmgs ]).T).reshape(-1)
 
 		nbody_transits,success = self.CoplanarParametersTransits(nbody_params,t0=0.0)
-
 		if not success:
 			return -np.inf
+		
+		####################################################################################################################
+		nbodyTransitOrder = np.argsort( np.array([ntransits[self.transit_numbers[i][0]] for i,ntransits in enumerate(nbody_transits)] ))
+		while nbodyTransitOrder[0] != self.transitOrder[0]:
+			#print "shifting transit orders..."
+			firstToTransit = self.transitOrder[0]
+			for i in np.arange(nbodyTransitOrder.tolist().index(firstToTransit)):
+				planetNumber = nbodyTransitOrder[i]
+				nbody_transits[planetNumber] = nbody_transits[planetNumber][1:]
+			
+			nbodyTransitOrder = np.argsort( np.array([ntransits[self.transit_numbers[i][0]] for ntransits in nbody_transits]) )	
+		####################################################################################################################
 			
 		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])
 		
@@ -378,6 +390,7 @@ class TTVFitnessAdvanced(TTVFitness):
 			observed_numbers=np.append(observed_numbers, self.transit_numbers[i])
 			uncertainties=np.append(uncertainties,self.transit_uncertainties[i])
 			nbody_times=np.append(nbody_times , (nbody_transits[i])[self.transit_numbers[i]])
+		
 		
 		def func(x,tau,t0):
 			return tau * x + t0
@@ -399,7 +412,7 @@ class TTVFitnessAdvanced(TTVFitness):
 		
 	def CoplanarParametersTransformedTransits(self,params,observed_only=False):
 		"""
-		Return the chi-squared fitness of transit times of a coplanar planet system generated from
+		Return the transit times of a coplanar planet system generated from
 		 the given set of 'params'. 'params' should be an (Nx5)-2 array, where N is the number of planets.
 		 Once generated, the transit times will be transformed using linear least-squares to solve for a
 		 rescaling factor and time offset.  This allows periods to be represented relative to the period 
@@ -421,7 +434,19 @@ class TTVFitnessAdvanced(TTVFitness):
 
 		if not success:
 			return np.array([]), success
+		
+		####################################################################################################################
+		nbodyTransitOrder = np.argsort( np.array([ntransits[self.transit_numbers[i][0]] for i,ntransits in enumerate(nbody_transits)] ))
+		while nbodyTransitOrder[0] != self.transitOrder[0]:
+			#print "shifting transit orders..."
+			firstToTransit = self.transitOrder[0]
+			for i in np.arange(nbodyTransitOrder.tolist().index(firstToTransit)):
+				planetNumber = nbodyTransitOrder[i]
+				nbody_transits[planetNumber] = nbody_transits[planetNumber][1:]
 			
+			nbodyTransitOrder = np.argsort( np.array([ntransits[self.transit_numbers[i][0]] for ntransits in nbody_transits]) )	
+		####################################################################################################################
+	
 		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])	
 		for i in range(self.nplanets):
 			if max(self.transit_numbers[i]) >= len(nbody_transits[i]):
@@ -555,8 +580,20 @@ if __name__=="__main__":
 		errorbar(newData[:,1],linefit_resids(newData[:,0],newData[:,1],newData[:,2]),yerr=noiseLvl)
 	savefig('KOI620_Artificial.png')
 		
-		
 	
+	for i,times in enumerate(transitTimes):
+		noiseLvl = median(nbody_fit.transit_uncertainties[i])
+		nTransits = len(times)
+		noise = np.random.normal(0.0,noiseLvl,nTransits	)
+		noisyTimes = times + noise
+		np.savetxt("Artificial/planet%d.txt"%i,vstack(( arange(nTransits) , noisyTimes, noiseLvl * np.ones(nTransits) ) ).T)
+		
+		t0,p  = linefit( np.arange(nTransits) ,noisyTimes)
+		errorbar(noisyTimes, noisyTimes - p* arange(nTransits) - t0 ,yerr=noiseLvl ,fmt='s') 
+		
+	show()		
+		
+		
 if False:	
 	# planet 1
 	mass=1.e-5
