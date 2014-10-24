@@ -547,12 +547,6 @@ class TTVFitnessAdvanced(TTVFitness):
 			
 
 		
-bad_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
-				[9.87796689e-06,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])
-good_input=np.array([[1.16746609e-05,1.00000000e+00,8.28383607e-01, 9.00000000e+01,0.00000000e+00,-5.53625570e+01, np.mod(5.53625570e+01,360.)],\
-				[9.87796689e-07,1.51482170e+00,6.46210070e-01,9.00000000e+01,0.00000000e+00,-5.42237074e+01,2.23300213e+02]])		
-
-nbody_compute = TTVCompute()
 if __name__=="__main__":
 	# a comment
 	def linefit2(x,y,sigma=None):
@@ -570,29 +564,29 @@ if __name__=="__main__":
 	nbody_fit=TTVFitnessAdvanced([np.loadtxt(f) for f in planetNames])
 
 	transitTimes,sucess = nbody_fit.CoplanarParametersTransformedTransits(loadtxt('bestpars.txt'))
-	for i,times in enumerate(transitTimes):
-		noiseLvl = median(nbody_fit.transit_uncertainties[i])
-		nTimes = len(times)
-		noise = random.normal(0.,noiseLvl,nTimes)
-		
-		newData = vstack(( arange(nTimes),times+noise, noiseLvl * ones(nTimes) )).T
-		savetxt("planet%d.txt"%i,newData)
-		
-		errorbar(newData[:,1],linefit_resids(newData[:,0],newData[:,1],newData[:,2]),yerr=noiseLvl)
-	savefig('KOI620_Artificial.png')
-		
-	
-	for i,times in enumerate(transitTimes):
-		noiseLvl = median(nbody_fit.transit_uncertainties[i])
-		nTransits = len(times)
-		noise = np.random.normal(0.0,noiseLvl,nTransits	)
-		noisyTimes = times + noise
-		np.savetxt("Artificial/planet%d.txt"%i,vstack(( arange(nTransits) , noisyTimes, noiseLvl * np.ones(nTransits) ) ).T)
-		
-		t0,p  = linefit( np.arange(nTransits) ,noisyTimes)
-		errorbar(noisyTimes, noisyTimes - p* arange(nTransits) - t0 ,yerr=noiseLvl ,fmt='s') 
-		
-	show()		
+#	for i,times in enumerate(transitTimes):
+#		noiseLvl = median(nbody_fit.transit_uncertainties[i])
+#		nTimes = len(times)
+#		noise = random.normal(0.,noiseLvl,nTimes)
+#		
+#		newData = vstack(( arange(nTimes),times+noise, noiseLvl * ones(nTimes) )).T
+#		savetxt("planet%d.txt"%i,newData)
+#		
+#		errorbar(newData[:,1],linefit_resids(newData[:,0],newData[:,1],newData[:,2]),yerr=noiseLvl)
+#	savefig('KOI620_Artificial.png')
+#		
+#	
+#	for i,times in enumerate(transitTimes):
+#		noiseLvl = median(nbody_fit.transit_uncertainties[i])
+#		nTransits = len(times)
+#		noise = np.random.normal(0.0,noiseLvl,nTransits	)
+#		noisyTimes = times + noise
+#		np.savetxt("Artificial/planet%d.txt"%i,vstack(( arange(nTransits) , noisyTimes, noiseLvl * np.ones(nTransits) ) ).T)
+#		
+#		t0,p  = linefit( np.arange(nTransits) ,noisyTimes)
+#		errorbar(noisyTimes, noisyTimes - p* arange(nTransits) - t0 ,yerr=noiseLvl ,fmt='s') 
+#		
+#	show()		
 		
 		
 if False:	
