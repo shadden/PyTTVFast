@@ -483,7 +483,7 @@ class TTVFitnessAdvanced(TTVFitness):
 		pars = shaped_params[:,(0,1,2)].reshape(-1)
 		
 		period = shaped_params[1:,3]/shaped_params[0,3] 
-		meanLong = np.mod(shaped_params[1:,4] - shaped_params[0,4] + np.pi,2*np.pi) - np.pi	
+		meanLong = np.mod(shaped_params[1:,4] - period[0]*shaped_params[0,4]/period[1:] + np.pi,2*np.pi) - np.pi	
 		
 		return np.append(pars, np.vstack((period,meanLong)).T.reshape(-1) )
 		
