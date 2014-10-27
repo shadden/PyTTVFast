@@ -205,7 +205,8 @@ class TTVFitness(TTVCompute):
 		self.transit_uncertainties = [ data[:,2] for data in observed_transit_data ] 
 		
 		self.tInit_estimates,self.period_estimates = np.array([linefit(data[:,0],data[:,1]) for data in self.observed_transit_data ]).T
-		self.transitOrder = np.argsort( np.array([tTimes[0] for tTimes in self.transit_times]) )
+		#self.transitOrder = np.argsort( np.array([tTimes[0] for tTimes in self.transit_times]) )
+		self.transitOrder = np.argsort( self.tInit_estimates )
 		pMax = max(self.period_estimates)
 		pMin = min(self.period_estimates)
 		# Begginings and ends of integration to be a little more than a full period of the longest period
@@ -302,8 +303,11 @@ class TTVFitness(TTVCompute):
 				periods = self.FitBestPeriods(mass,evecs).x
 			pmgs = np.arctan2(evecs[:,1],evecs[:,0])
 			# TTVFast coordinates have observer along z-axis so planets transit when theta = pi/2
+			#meanLongs = 2.*np.pi * (nbody_fit.tInit_estimates[0]- 0.25*nbody_fit.period_estimates[0] - nbody_fit.tInit_estimates) / nbody_fit.period_estimates + 0.5 * np.pi
+		
 			meanAnoms =   0.5 * np.pi - (initTransits - epoch) * 2 * np.pi / periods - 2. * evecs[:,0] - pmgs
 			meanAnoms = np.mod(meanAnoms + np.pi,2. * np.pi) - np.pi
+		
 			ic = np.array(np.vstack([mass,evecs[:,0],evecs[:,1],periods,meanAnoms]).T).reshape(-1)
 			params.append(ic)
 		if style == 1:
@@ -344,6 +348,44 @@ class TTVFitnessAdvanced(TTVFitness):
 		self.pratios = self.period_estimates / np.min(self.period_estimates)
 		self.tFin = np.max([ np.max(times) for times in self.transit_times ]) / np.min(self.period_estimates) + 1.1 * max(self.pratios) 
 		
+	
+	def GenerateInitialConditions(self,masses,evectors,lazy=True,style=1):
+		"""
+		For a list of masses and eccentricity vectors, create inital condition parameters with
+		periods set to the average planet periods measured by linear fit and with initial values
+		of Mean Anomaly that result in the first observed transit occuring at the observed time
+		for an unperturbed orbit.
+		"""
+	#	assert masses.shape[0]==evectors.shape[0],"Input parameters must be properly shaped numpy arrays!"
+	#	assert masses.shape[1]==self.nplanets and evectors.shape[1]==self.nplanets ,"Input parameters must be properly shaped numpy arrays!"
+	#	assert evectors.shape[2]==2,"Input parameters must be properly shaped numpy arrays!"
+		
+		params = []
+		if self.transitOrder[0]==0:
+			meanLongs = 2.*np.pi * (self.tInit_estimates[0] - 0.25*self.period_estimates[0] - self.tInit_estimates) / self.period_estimates + 0.5 * np.pi
+			meanLongs = np.mod(meanLongs[1:] + np.pi,2. * np.pi)-np.pi
+		elif np.min(self.tInit_estimates) > self.transit_times[0][0] - 0.25 * self.period_estimates[0]:
+			meanLongs = 2.*np.pi * (self.tInit_estimates[0] - 0.25*self.period_estimates[0] - self.tInit_estimates) / self.period_estimates + 0.5 * np.pi
+			meanLongs = np.mod(meanLongs[1:] + np.pi,2. * np.pi)-np.pi	
+		else:
+
+			meanLongs = 2.*np.pi * (self.tInit_estimates[0] - 1.25*self.period_estimates[0] - self.tInit_estimates) / self.period_estimates + 0.5 * np.pi
+			meanLongs = np.mod(meanLongs[1:] + np.pi,2. * np.pi)-np.pi
+			
+		periods = self.period_estimates[1:]/self.period_estimates[0]
+		
+		params = np.append( np.hstack((masses.reshape(-1,1),evectors)) , np.array( zip(periods,meanLongs) ) )
+		return params
+		
+	def GenerateRandomInitialConditions(self,masses,sigma_dm_m,evecs,sigma_e,N,**kwargs):
+		
+		mass_list = masses * (1. + sigma_dm_m * np.random.randn(N,self.nplanets) )
+		evecs_list = evecs  +  sigma_e * np.random.randn(N,self.nplanets,2)
+		iclist = []
+		for mass,evec in zip(mass_list,evecs_list):
+			iclist.append(self.GenerateInitialConditions(mass,evec))
+		return iclist
+
 	def CoplanarParametersFitness(self,params):
 		"""
 		Return the chi-squared fitness of transit times of a coplanar planet system generated from
@@ -369,7 +411,7 @@ class TTVFitnessAdvanced(TTVFitness):
 			return -np.inf
 		
 		####################################################################################################################
-		nbodyTransitOrder = np.argsort( np.array([ntransits[self.transit_numbers[i][0]] for i,ntransits in enumerate(nbody_transits)] ))
+		nbodyTransitOrder = np.argsort( np.array([ ntransits[0] for ntransits in nbody_transits] ))
 		while nbodyTransitOrder[0] != self.transitOrder[0]:
 			#print "shifting transit orders..."
 			firstToTransit = self.transitOrder[0]
@@ -377,7 +419,7 @@ class TTVFitnessAdvanced(TTVFitness):
 				planetNumber = nbodyTransitOrder[i]
 				nbody_transits[planetNumber] = nbody_transits[planetNumber][1:]
 			
-			nbodyTransitOrder = np.argsort( np.array([ntransits[self.transit_numbers[i][0]] for ntransits in nbody_transits]) )	
+			nbodyTransitOrder = np.argsort( np.array([ntransits[0] for ntransits in nbody_transits]) )	
 		####################################################################################################################
 			
 		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])
@@ -436,7 +478,7 @@ class TTVFitnessAdvanced(TTVFitness):
 			return np.array([]), success
 		
 		####################################################################################################################
-		nbodyTransitOrder = np.argsort( np.array([ntransits[self.transit_numbers[i][0]] for i,ntransits in enumerate(nbody_transits)] ))
+		nbodyTransitOrder = np.argsort( np.array([ ntransits[0] for ntransits in nbody_transits] ))
 		while nbodyTransitOrder[0] != self.transitOrder[0]:
 			#print "shifting transit orders..."
 			firstToTransit = self.transitOrder[0]
@@ -444,7 +486,7 @@ class TTVFitnessAdvanced(TTVFitness):
 				planetNumber = nbodyTransitOrder[i]
 				nbody_transits[planetNumber] = nbody_transits[planetNumber][1:]
 			
-			nbodyTransitOrder = np.argsort( np.array([ntransits[self.transit_numbers[i][0]] for ntransits in nbody_transits]) )	
+			nbodyTransitOrder = np.argsort( np.array([ntransits[0] for ntransits in nbody_transits]) )	
 		####################################################################################################################
 	
 		observed_times,observed_numbers,uncertainties,nbody_times = np.array([]),np.array([]),np.array([]),np.array([])	
@@ -587,8 +629,21 @@ if __name__=="__main__":
 	with open('planets.txt') as fi:
 		planetNames = [l.strip() for l in fi.readlines()]
 	nbody_fit=TTVFitnessAdvanced([np.loadtxt(f) for f in planetNames])
+	
+# 	meanLongs = 2.*np.pi * (nbody_fit.tInit_estimates[0]- 0.25*nbody_fit.period_estimates[0] - nbody_fit.tInit_estimates) / nbody_fit.period_estimates + 0.5 * np.pi
+# 	pars = np.array([
+# 	1.e-5,0.02,0.01,\
+# 	3.e-4,0.02,0.0,\
+# 	1.e-5,0.0,0.0,\
+# 	2.0539438, meanLongs[1],\
+# 	4.87612662,meanLongs[2]
+# 	])
 
-	transitTimes,sucess = nbody_fit.CoplanarParametersTransformedTransits(loadtxt('bestpars.txt'))
+	initpars = nbody_fit.GenerateInitialConditions( 1.e-6 * ones(nbody_fit.nplanets), zeros((nbody_fit.nplanets,2)) )
+	print [t[0] for t in nbody_fit.transit_times]
+	print [t[nbody_fit.transit_numbers[i][0]] for i,t in enumerate(nbody_fit.CoplanarParametersTransformedTransits(initpars)[0])]
+
+#	transitTimes,sucess = nbody_fit.CoplanarParametersTransformedTransits(loadtxt('bestpars.txt'))
 #	for i,times in enumerate(transitTimes):
 #		noiseLvl = median(nbody_fit.transit_uncertainties[i])
 #		nTimes = len(times)
