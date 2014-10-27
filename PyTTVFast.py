@@ -544,6 +544,31 @@ class TTVFitnessAdvanced(TTVFitness):
 		
 		return leastsq(objectivefn, params0,full_output=1)
 		
+	def PeriodAndLongitudeFit(self,params0):
+		"""
+		Use L-M minimization to find the best-fit set of periods and mean longitudes for a fixed set of masses and eccentricities
+		along with an estimated covariance matrix"""
+		target_data = np.array([])
+		errors = np.array([])
+		#for t in self.transit_times:
+		for i in range(self.nplanets):
+			target_data = np.append(target_data,self.transit_times[i])
+			errors = np.append(errors,self.transit_uncertainties[i])
+			
+		massAndEcc = params0[:self.nplanets*3]
+		periodAndLong0 = params0[self.nplanets*3:]
+		def objectivefn(x):
+			inpt = np.hstack((massAndEcc,x))
+			times =  self.CoplanarParametersTransformedTransits(inpt,observed_only=True)[0]
+			answer = np.array([],dtype=float)
+			for t in times:
+				answer = np.append( answer,np.array(t) )
+			#
+	 
+			return (answer - target_data)/errors
+		
+		best,cov =  leastsq(objectivefn, periodAndLong0 ,full_output=1)[:2]
+		return np.hstack((massAndEcc,best)),cov
 			
 
 		
