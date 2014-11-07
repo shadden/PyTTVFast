@@ -611,38 +611,7 @@ class TTVFitnessAdvanced(TTVFitness):
 		
 		best,cov =  leastsq(objectivefn, periodAndLong0 ,full_output=1)[:2]
 		return np.hstack((massAndEcc,best)),cov
-			
-
 		
-if __name__=="__main__":
-	# a comment
-	def linefit2(x,y,sigma=None):
-	
-		assert len(x) == len(y), "Cannot fit line with different length dependent and independent variable data!"
-		linefn = lambda x,slope,intercept: x*slope + intercept
-		return curve_fit(linefn,x,y,sigma=sigma)
-	def linefit_resids(x,y,sigma=None):
-		s,m = linefit2(x,y,sigma)[0]
-		return y - s*x -m
-	#
-	import glob
-	with open('planets.txt') as fi:
-		planetNames = [l.strip() for l in fi.readlines()]
-	nbody_fit=TTVFitnessAdvanced([np.loadtxt(f) for f in planetNames])
-	
-# 	meanLongs = 2.*np.pi * (nbody_fit.tInit_estimates[0]- 0.25*nbody_fit.period_estimates[0] - nbody_fit.tInit_estimates) / nbody_fit.period_estimates + 0.5 * np.pi
-# 	pars = np.array([
-# 	1.e-5,0.02,0.01,\
-# 	3.e-4,0.02,0.0,\
-# 	1.e-5,0.0,0.0,\
-# 	2.0539438, meanLongs[1],\
-# 	4.87612662,meanLongs[2]
-# 	])
-
-	initpars = nbody_fit.GenerateInitialConditions( 1.e-6 * ones(nbody_fit.nplanets), zeros((nbody_fit.nplanets,2)) )
-	print [t[0] for t in nbody_fit.transit_times]
-	print [t[nbody_fit.transit_numbers[i][0]] for i,t in enumerate(nbody_fit.CoplanarParametersTransformedTransits(initpars)[0])]
-
 #	transitTimes,sucess = nbody_fit.CoplanarParametersTransformedTransits(loadtxt('bestpars.txt'))
 #	for i,times in enumerate(transitTimes):
 #		noiseLvl = median(nbody_fit.transit_uncertainties[i])
