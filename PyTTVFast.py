@@ -582,7 +582,10 @@ class TTVFitnessAdvanced(TTVFitness):
 				answer = np.append( answer,np.array(t) )
 			#
 	 
-			return (answer - target_data)/errors
+			try:
+				return (answer - target_data)/errors
+			except:
+				return -np.inf * np.ones(len(target_data))
 		
 		return leastsq(objectivefn, params0,full_output=1)
 		
@@ -612,32 +615,48 @@ class TTVFitnessAdvanced(TTVFitness):
 		best,cov =  leastsq(objectivefn, periodAndLong0 ,full_output=1)[:2]
 		return np.hstack((massAndEcc,best)),cov
 		
-#	transitTimes,sucess = nbody_fit.CoplanarParametersTransformedTransits(loadtxt('bestpars.txt'))
-#	for i,times in enumerate(transitTimes):
-#		noiseLvl = median(nbody_fit.transit_uncertainties[i])
-#		nTimes = len(times)
-#		noise = random.normal(0.,noiseLvl,nTimes)
-#		
-#		newData = vstack(( arange(nTimes),times+noise, noiseLvl * ones(nTimes) )).T
-#		savetxt("planet%d.txt"%i,newData)
-#		
-#		errorbar(newData[:,1],linefit_resids(newData[:,0],newData[:,1],newData[:,2]),yerr=noiseLvl)
-#	savefig('KOI620_Artificial.png')
-#		
-#	
-#	for i,times in enumerate(transitTimes):
-#		noiseLvl = median(nbody_fit.transit_uncertainties[i])
-#		nTransits = len(times)
-#		noise = np.random.normal(0.0,noiseLvl,nTransits	)
-#		noisyTimes = times + noise
-#		np.savetxt("Artificial/planet%d.txt"%i,vstack(( arange(nTransits) , noisyTimes, noiseLvl * np.ones(nTransits) ) ).T)
-#		
-#		t0,p  = linefit( np.arange(nTransits) ,noisyTimes)
-#		errorbar(noisyTimes, noisyTimes - p* arange(nTransits) - t0 ,yerr=noiseLvl ,fmt='s') 
-#		
-#	show()		
+if __name__=="__main__":
+	# a comment
+	def linefit2(x,y,sigma=None):
+	
+		assert len(x) == len(y), "Cannot fit line with different length dependent and independent variable data!"
+		linefn = lambda x,slope,intercept: x*slope + intercept
+		return curve_fit(linefn,x,y,sigma=sigma)
+	def linefit_resids(x,y,sigma=None):
+		s,m = linefit2(x,y,sigma)[0]
+		return y - s*x -m
+	#
+	try:
+		with open('planets.txt') as fi:
+			planetNames = [l.strip() for l in fi.readlines()]
+		nbody_fit=TTVFitnessAdvanced([np.loadtxt(f) for f in planetNames])
+	except:
+		raise Exception("Planets file(s) not found!")
+
+
+	try:
+		transitTimes,sucess = nbody_fit.CoplanarParametersTransformedTransits(np.loadtxt('bestpars.txt'))
+	except:
+		raise Exception("No file `bestpars.txt' found.")
+
 		
+	
+	os.system('mkdir -p ./Artificial')
+	fi = open("Artificial/planets.txt","w")
+	for i,times in enumerate(transitTimes):
+		noiseLvl = median(nbody_fit.transit_uncertainties[i])
+		nTransits = len(times)
+		noise = np.random.normal(0.0,noiseLvl,nTransits	)
+		noisyTimes = times + noise
+		np.savetxt("Artificial/planet%d.txt"%i,vstack(( arange(nTransits) , noisyTimes, noiseLvl * np.ones(nTransits) ) ).T)
+		fi.write("planet%d.txt\n"%i)
+		t0,p  = linefit( np.arange(nTransits) ,noisyTimes)
+		errorbar(noisyTimes, noisyTimes - p* arange(nTransits) - t0 ,yerr=noiseLvl ,fmt='s') 
+
+	savefig('Artificial/Artificial_Transits.png')
 		
+	show()		
+				
 if False:	
 	# planet 1
 	mass=1.e-5
