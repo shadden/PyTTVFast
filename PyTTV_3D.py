@@ -1,3 +1,19 @@
+#	Normal coords	|	TTVFast coords
+#---------------------------------------
+#	theta = 0		| 	theta' = pi /2
+#	ex =e*cos(w)	|	ex' = e*cos(w' + pi/2) = -ey 	
+#	ey				|	ey' = ex
+		
+
+def linefit(x,y):
+	assert len(x) == len(y), "Cannot fit line with different length dependent and independent variable data!"
+	const = np.ones(len(y))
+	A = np.vstack([const,x]).T
+	return np.linalg.lstsq(A,y)[0]
+def line_resids(x,y):
+	y0,s = linefit(x,y)
+	return y - s*x - y0
+	
 from ctypes import *
 import numpy as np
 import matplotlib.pyplot as pl
@@ -151,9 +167,9 @@ class TTVCompute(object):
 		
 	def MCMC_Param_TransitTimes(self,planet_params,tFin):
 		""" Return transit times for input parameters given in the form:
-				[ mass, period, ex, ey, Ix, Iy , T_0 ]
+				[ mass, period, ex, ey, I, Omega , T_0 ]
 			for each planet """
-		mass,period,ex,ey,Ix,Iy,T0 = planet_params.reshape(-1, 7).T
+		mass,period,ex,ey,I,Omega,T0 = planet_params.reshape(-1, 7).T
 		
 		# Choose an epoch based on the first transit time
 		epoch = np.min( T0 ) - 0.1 * min(period)
@@ -161,25 +177,31 @@ class TTVCompute(object):
 		# Convert to standard astrocentric orbels:
 		
 		ecc = np.sqrt( ex **2 + ey**2 )
-		varpi = np.arctan2(ex,ey) + np.pi / 2.
-		Inc = np.sqrt( Ix **2 + Iy**2 )
-		Omega =  np.arctan2(Ix,Iy) + np.pi / 2.
-		MeanLongitude = 2. * np.pi * ( epoch - T0 ) / period + 2 * ey + np.pi / 2.
+		arg_peri = np.arctan2(ey,ex) 
+		
+		MeanLongitude = 2. * np.pi * ( epoch - T0 ) / period  + 0.5 * np.pi 
 		
 		# 
-		arg_peri = varpi - Omega
+		varpi = arg_peri + Omega
 		MeanAnom = MeanLongitude - varpi
 		
-		# TTVFast Coordinates: [mass, period, e, i, Node, Peri, Mean Anomaly ]
-		rad2deg = lambda x: np.mod(x *180. / np.pi ,360. )
-		ttvfast_pars = np.vstack(( mass,period,ecc , rad2deg(Inc) , rad2deg(Omega) , rad2deg(arg_peri), rad2deg(MeanAnom))).T
+		# TTVFast Coordinates: [mass, period, e, i, Node, Argument Peri(?), Mean Anomaly ]
+		rad2deg = lambda x: np.mod(x * 180. / np.pi ,360. )
+		ttvfast_pars = np.vstack(( mass,period,ecc , rad2deg(I) , rad2deg(Omega) , rad2deg(arg_peri), rad2deg(MeanAnom))).T
 		
-		return self.TransitTimes(tfin,ttvfast_pars,t0=epoch)
+		return self.TransitTimes(tFin,ttvfast_pars,t0=epoch)
+	
+	def MCMC_CoplanarParam_TransitTimes(self,coplanar_planet_params,tFin):
+		""" Return transit times for input parameters given in the form:
+				[ mass, period, ex, ey, I, Omega , T_0 ]
+			for each planet """
+		mass,period,ex,ey,T0 = coplanar_planet_params.reshape(-1, 5).T
+		npl = len(mass)
+		full_pars = np.vstack((mass,period,ex,ey,np.pi/2.*np.ones(npl),np.zeros(npl),T0)).T
+		return self.MCMC_Param_TransitTimes(full_pars,tFin)
 		
-class TransitObservations(object):
-""" An object to store transit observations.""""
+class TransitObservations(object): 
 	def __init__(self,observed_transit_data):
-		
 		self.observed_transit_data = observed_transit_data
 		self.nplanets = len(observed_transit_data)
 		self.transit_numbers = [ (data[:,0]).astype(int) for data in observed_transit_data ] 
@@ -189,10 +211,19 @@ class TransitObservations(object):
 		self.flat_transits = []
 		for transits in self.transit_times:
 			for time in transits:
-			flat_transits.append(time)
-		self.flat_transits = np.array(transits)
+				self.flat_transits.append(time)
+		self.flat_transits = np.array(self.flat_transits)
+		
+		self.PeriodEstimates = []
+		self.tInitEstimates = []
+		for nums,times in zip(self.transit_numbers,self.transit_times):
+			self.PeriodEstimates.append( linefit(nums,times)[1] )
+			self.tInitEstimates.append( linefit(nums,times)[0] )
+
+		self.PeriodEstimates = np.array( self.PeriodEstimates )
+		self.tInitEstimates = np.array( self.tInitEstimates )
 			 
-	def get_chi2(tansitsList):
+	def get_chi2(self,transitsList):
 		chi2 = 0.0
 		for i,transits in enumerate(transitsList):
 			chi2 += np.sum([  ((transits - self.transit_times[i]) / self.transit_uncertainties[i] )**2 ])
@@ -202,17 +233,290 @@ class TransitObservations(object):
 		return np.max( self.flat_transits )
 	def tInit(self):
 		return np.min( self.flat_transits )
+	
+class ImpactParameterObservations(object):
+		r2au = 0.004649
+		def __init__(self,rstar_data,mstar_data,b_data):
+			"""	
+			Store data on stellar mass/radius uncertainty and inclinations through
+			impact parameters.
+			"""
+			self.Rstar,self.Rstar_err = rstar_data
+			self.Mstar,self.Mstar_err = mstar_data
+			# impact parameters
+			self.b,self.b_err = b_data.T
 		
+		def ImpactParametersToInclinations(self,periods):
+			""" 
+			Convert periods and impact parameters to inclinations using stellar radius and mass.
+			""" 	
+ 			rstar = self.r2au * self.Rstar
+			sigma_rstar = self.r2au * self.Rstar_err
+			mstar = self.Mstar
+			sigma_mstar = self.Mstar_err
+			b = self.b
+			sigma_b = self.b_err
+			
+			a = ( mstar * (periods/ 365.25)**2 )**(1./3.)	
+			cosi0 = np.abs( self.b * rstar / a )
+	
+			#sigma_cosi ~  Sum [ d (cosi) /dq * sigma_q ]
+			dcos_dM = -(1./3.) * cosi0  / mstar
+			dcos_dr = b / a
+			dcos_db = rstar / a
+ 			sigma_cosi = np.sqrt( (dcos_dr * sigma_rstar)**2 + (dcos_dM * sigma_mstar )**2 + (dcos_db * sigma_b )**2 )
+
+ 			return np.arccos(cosi0) , np.diag(sigma_cosi)
+ 		
+ 		def ImpactParametersPriors(self,inclinations, periods):
+			""" 
+			Gaussian priors based on formula (a/R_*) cos(i) = b.  Assumes that fractional uncertainties
+			are sufficiently small that we can linearize cos(i)'s dependence on the parameter errors
+			and therefore add error contributions in quadrature.
+			"""
+			rstar = self.r2au * self.Rstar
+			sigma_rstar = self.r2au * self.Rstar_err
+			mstar = self.Mstar
+			sigma_mstar = self.Mstar_err
+			b = self.b
+			sigma_b = self.b_err
+	
+			cosi = np.abs( np.cos(inclinations) ) 
+			a = ( mstar * (periods/ 365.25)**2 )**(1./3.)
+	
+			cosi0 = np.abs( b * rstar / a )
+	
+			#sigma_cosi ~  Sum [ d (cosi) /dq * sigma_q ]
+			dcos_dM = -(1./3.) * cosi0  / mstar
+			dcos_dr = b / a
+			dcos_db = rstar / a
+	
+ 			sigma_cosi = np.sqrt( (dcos_dr * sigma_rstar)**2 + (dcos_dM * sigma_mstar )**2 + (dcos_db * sigma_b )**2 )
+
+ 			return -0.5 * np.sum ( (cosi - cosi0)**2 / sigma_cosi**2 )
+
+
+			
+
+
 class TTVFit(TTVCompute):
 	def __init__(self,observed_transit_data):
 		self.interface = libwrapper()
 		self.Observations = TransitObservations(observed_transit_data)
 	
+	def ParameterFitness(self,planet_params):
+		"""
+		Return log-likelihood = -0.5* chi*2 computed from planet parameters given 
+		as a list in the form:
+			mass, period, ex, ey , I , Omega, T0
+				---- OR ----
+			mass, period, ex, ey , T0
+		for each planet.
+		"""
+		
+		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
+		if planet_params.shape[-1]%7==0:
+			transits,success = self.MCMC_Param_TransitTimes(planet_params,tFinal)
+		elif planet_params.shape[-1]%5==0:
+			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
+		else:
+			print "Bad input dimensions!"
+			raise
+		if not success:
+			return -np.inf
+		try:
+			transit_list = [ transits[i][nums] for i,nums in enumerate(self.Observations.transit_numbers) ]
+		except:
+			# If the number of computed transits is less than the number of observed transits
+			#	then -infinity should be returned
+			return -np.inf
+			
+			
+		chi2 = self.Observations.get_chi2(transit_list)
+		return - 0.5 * chi2
 	
+		
+	def LeastSquareParametersFit(self,params0,inclination_data=None):
+		"""
+		Use L-M minimization to find the best-fit set of input parameters along with an estimated covariance matrix.
+		The method will assume coplanar orbits or full 3D orbits based on the number of input parameters.
+		"""
+		npl = self.Observations.nplanets
+		if len(params0.reshape(-1)) == npl * 5:
+			coplanar = True
+		elif len(params0.reshape(-1)) == npl * 7:
+			coplanar = False
+		else:
+			print "Shape of initial parameter does not match what is required for the number of planets!"
+			raise
+			
+		target_data = np.array([])
+		errors = np.array([])
+		
+		for time,err in zip(self.Observations.transit_times,self.Observations.transit_uncertainties):
+			target_data = np.append(target_data,time)
+			errors = np.append(errors,err)
+		
+		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
+		
+		def objectivefn(x):
+			
+			if coplanar:
+				transits,success = self.MCMC_CoplanarParam_TransitTimes(x,tFinal)
+			else:
+				transits,success = self.MCMC_Param_TransitTimes(x,tFinal)
+			if	inclination_data:
+					assert not coplanar, "Inclination data should not be include for coplanar fits"
+					cosi = np.abs( np.cos( x.reshape(-1,7)[:,4] ) )
+					cosi0 = inclination_data[0]
+					cosi_err = inclination_data[0]
+					inc_chi2 = (cosi - cosi0) / cosi_err
+			
+			answer = np.array([],dtype=float)
+			for i,t in enumerate(transits):
+				tnums = self.Observations.transit_numbers[i]
+				try:
+					answer = np.append( answer,np.array(t[tnums]) )
+				except:
+					return -np.inf * np.ones(len(target_data))
+			#
+			try:
+				ttvchi2 = (answer - target_data)/errors
+			except:
+				return -np.inf * np.ones(len(target_data))
+			
+			if inclination_data:
+				return np.append(ttvchi2,inc_chi2)
+			else:
+				return ttvchi2
+		
+		return leastsq(objectivefn, params0,full_output=1)
+	
+	
+	def ParameterPlot(self,planet_params,ShowObs=True):
+		"""
+		Plot TTVs from planet parameters given as a list in the form:
+			mass, period, ex, ey , I , Omega, T0
+				--- OR ---
+			mass, period, ex, ey , T0
+		for each planet.
+		"""
+		
+		tFinal = self.Observations.tFinal() + 0.1 * np.min(self.Observations.PeriodEstimates)
+		if planet_params.shape[-1]%7==0:
+			transits,success = self.MCMC_Param_TransitTimes(planet_params,tFinal)
+		elif planet_params.shape[-1]%5==0:
+			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
+		else:
+			print "Bad input dimensions!"
+			raise
+		assert success, "Failed to generate TTVs from specified parameters!"
+
+		npl = self.Observations.nplanets
+		T0 = self.Observations.tInitEstimates
+
+		color_pallette = ['b','r','g']
+		for i in range(npl):
+			pl.subplot( 100 *npl + 10 + i)
+			col = color_pallette[i%len(color_pallette)]
+			per = self.Observations.PeriodEstimates[i]		
+			pl.plot(transits[i], transits[i] - np.arange(len(transits[i])) * per - T0[i],"%s-"%col)
+	
+			if ShowObs:
+				otimes = self.Observations.transit_times[i]
+				ebs = self.Observations.transit_uncertainties[i]
+				trNums = self.Observations.transit_numbers[i]
+				pl.errorbar(otimes, otimes - trNums * per - T0[i],yerr=ebs,color=col,fmt='s')
+		
+	def coplanar_initial_conditions(self,mass,ex,ey):
+		npl = self.Observations.nplanets
+		assert mass.shape[0]==ex.shape[0]==ey.shape[0]==npl, "Improper input dimensions!"
+		return np.vstack((mass,self.Observations.PeriodEstimates,ex,ey,np.ones(npl)*np.pi/2.,np.zeros(npl),self.Observations.tInitEstimates)).T
+
 
 if __name__=="__main__":
-	test_elements = np.array([[ 1.e-5, 1.0, 0.03, 0.01, 0., 0. , 100.],\
-							  [ 1.e-5, 2.05, 0.01, -0.01, 0., 0. , 101.]])
+
+	nwalkers = 200
+
+	infile = 'planets.txt'
 	
+	with open(infile,'r') as fi:
+		infiles = [ line.strip() for line in fi.readlines()]
+	
+	input_data =[]
+	for file in infiles:
+		input_data.append( loadtxt(file) )
+	nplanets = len(input_data)
+
+
+	while min( array([ min(tr[:,0]) for tr in input_data])  ) != 0:
+		print "re-numbering transits..."
+		for data in input_data:
+			data[:,0] -= 1
+	
+	nbody_fit = TTVFit(input_data)
+	npl = nbody_fit.Observations.nplanets
+	
+	with open("inclination_data.txt") as fi:
+		lines = [l.split() for l in fi.readlines()]
+	mstar,sigma_mstar = map(float,lines[0])
+	rstar,sigma_rstar = map(float,lines[1])
+	b,sigma_b = np.array([map(float,l[1:]) for l in lines[2:] ]).T	
+	b_Obs = ImpactParameterObservations([rstar,sigma_rstar],[mstar,sigma_mstar], vstack((b,sigma_b)).T)
+	
+	pars0=nbody_fit.coplanar_initial_conditions(1.e-5*ones(3),random.normal(0,0.02,3),random.normal(0,0.02,3) )
+	cp_pars0=pars0[:,(0,1,2,3,6)]
+	
+	fitdata = nbody_fit.LeastSquareParametersFit(cp_pars0)
+	print "Fitness: %.2f"%nbody_fit.ParameterFitness(fitdata[0])
+	
+	best,cov = fitdata[:2]
+	
+	best3d = best.reshape(-1,5)
+	i0,sigma_i=b_Obs.ImpactParametersToInclinations(nbody_fit.Observations.PeriodEstimates)
+	best3d = np.hstack(( best3d[:,:4], i0.reshape(-1,1) , np.random.uniform(-0.005,0.005,(npl,1)), best3d[:,-1].reshape(-1,1) ))
+	print best3d.shape
+	best3d = best3d.reshape(-1)
+	fitdata = nbody_fit.LeastSquareParametersFit( best3d )
+	best,cov = fitdata[:2]
+	
+	
+	fitdata2 = nbody_fit.LeastSquareParametersFit( best ,inclination_data = [cos(i0),diagonal(sigma_i)] )
+	best,cov = fitdata2[:2]
+	print "3D Fitness: %.2f"%nbody_fit.ParameterFitness(best)
+	print "3D likelihood: %.2f"%fit(best)
+	p = random.multivariate_normal(best,cov/25.,size=nwalkers)
+
+	    		
+
+	
+	
+if False:
+	test_elements = np.array([[ 1.e-5, 1.0, 0.01, 0.02, np.pi / 2. + 0.01, 0.3 , 100.],\
+							  [ 1.e-5, 2.05,0.01,-0.01, np.pi / 2., 0. , 99.9]])
+	
+	test_cp_elements = np.array([[ 1.e-5, 1.0, 0.01, 0.02, 100.],\
+							   [1.e-5, 2.05,0.01,-0.01, 99.9]])
+
 	nb = TTVCompute()
-	nb.MCMC_Param_TransitTimes(test_elements,200.)
+	transits,success = nb.MCMC_Param_TransitTimes(test_elements,200.)
+	
+	obs_data = []
+	noise_lvl = 5.e-5
+	for times in transits:
+		ntimes = len(times)
+		noise  = np.random.normal(0,noise_lvl,ntimes)
+		print np.sum((noise/noise_lvl)**2)
+		obs_data.append( np.vstack((np.arange(ntimes),times+noise, np.ones(ntimes)*noise_lvl )).T   )
+	
+	fit = TTVFit(obs_data)
+	p0 = test_elements.copy().reshape(-1)
+	p0[0] *= 0.85
+	#p0[1] -= .0005
+	p0[2:4] = np.random.normal(0,0.1,2)
+	fitdat,ofn = fit.LeastSquareParametersFit(p0)
+	print fit.ParameterFitness(test_elements),fit.ParameterFitness(fitdat[0])
+
+	fit.ParameterPlot(test_elements)
+	fit.ParameterPlot(fitdat[0],False)
+	pl.show()
