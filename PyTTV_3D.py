@@ -325,6 +325,11 @@ class TTVFit(TTVCompute):
 		as a list in the form:
 			mass, period, ex, ey , I , Omega, T0
 				---- OR ----
+			[	[mass0, period0, ex0, ey0 , I0 , T00],
+				[mass1, period1, ex1, ey1 , I1 , dOmega, T01],
+				...
+			]
+				---- OR ----
 			mass, period, ex, ey , T0
 		for each planet.
 		"""
@@ -334,9 +339,12 @@ class TTVFit(TTVCompute):
 			transits,success = self.MCMC_Param_TransitTimes(planet_params,tFinal)
 		elif planet_params.shape[-1]%5==0:
 			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
+		elif len(planet_params.reshape(-1)) == 7 * self.Observations.nplanets - 1:
+			transits,success = self.MCMC_RelativeNodeParam_TransitTimes(planet_params,tFinal)
 		else:
 			print "Bad input dimensions!"
 			raise
+		
 		if not success:
 			return -np.inf
 		try:
@@ -513,8 +521,8 @@ if False:
 	
 if __name__=="__main__":
 	import sys
-	test_elements = np.array([[ 1.e-5, 1.0, 0.1, 0.2, np.pi / 2. - 0.03, 1.3 , 100.],\
-							  [ 1.e-5, 2.05,0.01,-0.01, np.pi / 2., 0. , 99.9]])
+	test_elements = np.array([[ 1.e-5, 1.0, 0.1, 0.15, np.pi / 2. - 0.03, 1.3 , 100.],\
+							  [ 1.e-5, 2.05,0.01,-0.01, np.pi / 2., 1.2 , 99.9]])
 	
 	test_cp_elements = np.array([[ 1.e-5, 1.0, 0.01, 0.02, 100.],\
 							   [1.e-5, 2.05,0.01,-0.01, 99.9]])
@@ -534,12 +542,15 @@ if __name__=="__main__":
 	dOmega = 0.3
 	p0[5] += dOmega
 	p0[5+7] += dOmega
-
+	p1 = p0.copy()
+	p1[5+7]-=  p1[5]
+	p1[5]  -=  p1[5]
+	p1=np.hstack((p1[:5] ,p1[6:] ))
 	print "First transit time"
 	print transits[0][0], "\n",nb.MCMC_Param_TransitTimes(p0,200.)[0][0][0],"\n"
 	
 	print "Parameter Fitness"
-	print fit.ParameterFitness(test_elements.reshape(-1)),"\n",fit.ParameterFitness(p0),"\n"
+	print fit.ParameterFitness(test_elements.reshape(-1)),"\n",fit.ParameterFitness(p0),"\n",fit.ParameterFitness(p1),"\n"
 	
 	print "TTV Fast Coordinates"
 	print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(test_elements)[1][0]))
