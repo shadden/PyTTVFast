@@ -433,8 +433,10 @@ class TTVFit(TTVCompute):
 		assert mass.shape[0]==ex.shape[0]==ey.shape[0]==npl, "Improper input dimensions!"
 		return np.vstack((mass,self.Observations.PeriodEstimates,ex,ey,np.ones(npl)*np.pi/2.,np.zeros(npl),self.Observations.tInitEstimates)).T
 
-
-if __name__=="__main__":
+#########################################################################################################
+#########################	Run fitting of observed transits and inclinations	#########################
+#########################################################################################################
+if False:
 
 	nwalkers = 200
 
@@ -490,8 +492,12 @@ if __name__=="__main__":
 	    		
 
 	
+#########################################################################################################
+#########################				Fit generated data 						#########################
+#########################################################################################################
 	
-if False:
+if __name__=="__main__":
+	import sys
 	test_elements = np.array([[ 1.e-5, 1.0, 0.01, 0.02, np.pi / 2. + 0.01, 0.3 , 100.],\
 							  [ 1.e-5, 2.05,0.01,-0.01, np.pi / 2., 0. , 99.9]])
 	
@@ -500,23 +506,20 @@ if False:
 
 	nb = TTVCompute()
 	transits,success = nb.MCMC_Param_TransitTimes(test_elements,200.)
-	
 	obs_data = []
 	noise_lvl = 5.e-5
 	for times in transits:
 		ntimes = len(times)
 		noise  = np.random.normal(0,noise_lvl,ntimes)
-		print np.sum((noise/noise_lvl)**2)
 		obs_data.append( np.vstack((np.arange(ntimes),times+noise, np.ones(ntimes)*noise_lvl )).T   )
 	
 	fit = TTVFit(obs_data)
 	p0 = test_elements.copy().reshape(-1)
-	p0[0] *= 0.85
-	#p0[1] -= .0005
-	p0[2:4] = np.random.normal(0,0.1,2)
-	fitdat,ofn = fit.LeastSquareParametersFit(p0)
-	print fit.ParameterFitness(test_elements),fit.ParameterFitness(fitdat[0])
-
-	fit.ParameterPlot(test_elements)
-	fit.ParameterPlot(fitdat[0],False)
-	pl.show()
+	print fit.ParameterFitness(p0)
+	dOmega = 0.3
+	p0[4] += dOmega
+	p0[4+7] += dOmega
+	print fit.ParameterFitness(p0)
+#	fit.ParameterPlot(test_elements)
+#	fit.ParameterPlot(fitdat[0],False)
+#	pl.show()
