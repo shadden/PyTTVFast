@@ -164,9 +164,9 @@ class TTVCompute(object):
 			condition= transits[:,0] == i
 			transitlists.append((transits[:,1])[condition])
 		return transitlists,success
-		
-	def MCMC_Param_TransitTimes(self,planet_params,tFin):
-		""" Return transit times for input parameters given in the form:
+	
+	def MCMC_Params_To_TTVFast(self,planet_params):
+		""" Return TTVFast coordinate inputs for input parameters given in the form:
 				[ mass, period, ex, ey, I, Omega , T_0 ]
 			for each planet """
 		mass,period,ex,ey,I,Omega,T0 = planet_params.reshape(-1, 7).T
@@ -175,20 +175,25 @@ class TTVCompute(object):
 		epoch = np.min( T0 ) - 0.1 * min(period)
 		
 		# Convert to standard astrocentric orbels:
-		
+		#------------------------------------------
 		ecc = np.sqrt( ex **2 + ey**2 )
-		arg_peri = np.arctan2(ey,ex) 
+		arg_peri = np.arctan2(ey,ex)  
 		
-		MeanLongitude = 2. * np.pi * ( epoch - T0 ) / period  + 0.5 * np.pi 
-		
-		# 
-		varpi = arg_peri + Omega
+		MeanLongitude = 2. * np.pi * ( epoch - T0 ) / period  + 0.5 * np.pi + Omega
+		varpi = arg_peri + Omega 
 		MeanAnom = MeanLongitude - varpi
 		
 		# TTVFast Coordinates: [mass, period, e, i, Node, Argument Peri(?), Mean Anomaly ]
 		rad2deg = lambda x: np.mod(x * 180. / np.pi ,360. )
 		ttvfast_pars = np.vstack(( mass,period,ecc , rad2deg(I) , rad2deg(Omega) , rad2deg(arg_peri), rad2deg(MeanAnom))).T
-		
+
+		return epoch,ttvfast_pars
+	
+	def MCMC_Param_TransitTimes(self,planet_params,tFin):
+		""" Return transit times for input parameters given in the form:
+				[ mass, period, ex, ey, I, Omega , T_0 ]
+			for each planet """
+		epoch,ttvfast_pars = self.MCMC_Params_To_TTVFast(planet_params)
 		return self.TransitTimes(tFin,ttvfast_pars,t0=epoch)
 	
 	def MCMC_CoplanarParam_TransitTimes(self,coplanar_planet_params,tFin):
@@ -198,6 +203,16 @@ class TTVCompute(object):
 		mass,period,ex,ey,T0 = coplanar_planet_params.reshape(-1, 5).T
 		npl = len(mass)
 		full_pars = np.vstack((mass,period,ex,ey,np.pi/2.*np.ones(npl),np.zeros(npl),T0)).T
+		return self.MCMC_Param_TransitTimes(full_pars,tFin)
+	
+	def MCMC_RelativeNodeParam_TransitTimes(self,rel_node_planet_params,tFin):
+		""" Return transit times for input parameters given in the form:
+				1st planet: 	[ mass, period, ex, ey, I, T_0 ] (Omega = 0)
+				Other planets:	[ mass, period, ex, ey, I, Omega=0 , T_0 ]
+			for each planet """
+		m0,p0,ex0,ey0,I0,T00 = rel_node_planet_params[:6]
+		p0params = np.array([m0,p0,ex0,ey0,I0,0.0,T00])
+		full_pars = vstack(( p0params,rel_node_planet_params[6:].reshape(-1, 7) ))
 		return self.MCMC_Param_TransitTimes(full_pars,tFin)
 		
 class TransitObservations(object): 
@@ -498,7 +513,7 @@ if False:
 	
 if __name__=="__main__":
 	import sys
-	test_elements = np.array([[ 1.e-5, 1.0, 0.01, 0.02, np.pi / 2. + 0.01, 0.3 , 100.],\
+	test_elements = np.array([[ 1.e-5, 1.0, 0.1, 0.2, np.pi / 2. - 0.03, 1.3 , 100.],\
 							  [ 1.e-5, 2.05,0.01,-0.01, np.pi / 2., 0. , 99.9]])
 	
 	test_cp_elements = np.array([[ 1.e-5, 1.0, 0.01, 0.02, 100.],\
@@ -515,11 +530,23 @@ if __name__=="__main__":
 	
 	fit = TTVFit(obs_data)
 	p0 = test_elements.copy().reshape(-1)
-	print fit.ParameterFitness(p0)
+	print 
 	dOmega = 0.3
-	p0[4] += dOmega
-	p0[4+7] += dOmega
-	print fit.ParameterFitness(p0)
+	p0[5] += dOmega
+	p0[5+7] += dOmega
+
+	print "First transit time"
+	print transits[0][0], "\n",nb.MCMC_Param_TransitTimes(p0,200.)[0][0][0],"\n"
+	
+	print "Parameter Fitness"
+	print fit.ParameterFitness(test_elements.reshape(-1)),"\n",fit.ParameterFitness(p0),"\n"
+	
+	print "TTV Fast Coordinates"
+	print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(test_elements)[1][0]))
+	print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(p0)[1][0]))
+	
+	
+	
 #	fit.ParameterPlot(test_elements)
 #	fit.ParameterPlot(fitdat[0],False)
 #	pl.show()
