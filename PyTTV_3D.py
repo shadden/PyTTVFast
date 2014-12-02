@@ -212,7 +212,7 @@ class TTVCompute(object):
 			for each planet """
 		m0,p0,ex0,ey0,I0,T00 = rel_node_planet_params[:6]
 		p0params = np.array([m0,p0,ex0,ey0,I0,0.0,T00])
-		full_pars = vstack(( p0params,rel_node_planet_params[6:].reshape(-1, 7) ))
+		full_pars = np.vstack(( p0params,rel_node_planet_params[6:].reshape(-1, 7) ))
 		return self.MCMC_Param_TransitTimes(full_pars,tFin)
 		
 class TransitObservations(object): 
@@ -337,10 +337,10 @@ class TTVFit(TTVCompute):
 		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
 		if planet_params.shape[-1]%7==0:
 			transits,success = self.MCMC_Param_TransitTimes(planet_params,tFinal)
-		elif planet_params.shape[-1]%5==0:
-			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
 		elif len(planet_params.reshape(-1)) == 7 * self.Observations.nplanets - 1:
 			transits,success = self.MCMC_RelativeNodeParam_TransitTimes(planet_params,tFinal)
+		elif planet_params.shape[-1]%5==0:
+			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
 		else:
 			print "Bad input dimensions!"
 			raise
