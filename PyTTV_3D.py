@@ -157,12 +157,84 @@ class TTVCompute(object):
 			return [],False
 		
 		transits = np.array([ ( transit.planet,transit.time ) for transit in model if transit.time != DEFAULT_TRANSIT ])
+		
 		if len(transits)==0:
 			return [],False
 		transitlists = []
 		for i in range(nplanets):
 			condition= transits[:,0] == i
 			transitlists.append((transits[:,1])[condition])
+		return transitlists,success
+	
+	def TransitData(self,tfin,planet_params,GM=1.0,t0=0.0,input_type='astro',dtfrac=0.02):
+		"""
+		Get transit times as well as the sky position and velocity from a TTVFast N-body integration.
+		
+		Parameters
+		----------
+		tfin : The stop-time of the integration
+		
+		planet_params: an N-planet by 7 array, with each entry in the form:
+			[mass, period, e, i, Node, Peri, Mean Anomaly ]
+			
+		GM : Gravitational constant time stellar mass
+		
+		t0 : Start time of integration, default = 0
+		
+		input_type : The input coordinate type (astro, jacobi, or cartesian)
+		
+		Returns
+		-------
+		 transit data: A list containing arrays for the transit of each planet.
+		 	Each array conatains the transit time, sky-position and sky-velocity.
+		 
+		 success: A boolean variable that indicates whether the integration succeeded or not.
+		"""
+		input_types = ['jacobi','astro','cartesian']
+		assert input_type in  input_types, "Invalid input type, valid choised are: '%s', '%s', or '%s'"%(input_types[0],input_types[1],input_types[2])
+		input_n = input_types.index(input_type)
+			
+		assert type(planet_params)==np.ndarray and (planet_params.shape)[-1]==7, "Bad planet parameters array!"
+
+		nplanets=len(planet_params)
+		params = np.array([1.0,GM])
+		for planet in planet_params:
+			params = np.append(params,planet)
+		
+		if input_n==0 or input_n==1:
+			periods = planet_params[:,1]
+			eccs = planet_params[:,2]
+		else:
+			vel2 = np.linalg.norm(planet_params[:,3:],axis=1)**2
+			r	= np.linalg.norm(planet_params[:,:3],axis=1)**2
+			GM_a = -2 * ( 0.5 * vel2 - GM /r )
+			periods = 2 * pi * np.power( GM_a  , -1.5 ) * GM
+
+			# this should be fixed!
+			eccs = np.zeros(nplanets)
+			
+		# Don't let the periapse set timestep less than 1/10th the planet period
+		dtfactors =  np.maximum( np.power( (1. - eccs ) ,1.5) , 0.1 )
+		dt = dtfrac * np.min( periods * dtfactors )
+		
+		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) )) + 1
+		
+		model = (n_events * CALCTRANSIT)()
+		for transit in model:
+			transit.time = DEFAULT_TRANSIT
+			
+		success = self.interface.TTVFast(params,dt,t0,tfin,nplanets,model,None,0,n_events, input_n)
+		if not success:
+			return [],False
+		
+		transitdata = np.array([ ( transit.planet,transit.time, transit.rsky, transit.vsky) for transit in model if transit.time != DEFAULT_TRANSIT ])
+		
+		if len(transits)==0:
+			return [],False
+		transitlists = []
+		for i in range(nplanets):
+			condition= transitdata[:,0] == i
+			transitlists.append((transitdata[:,1:])[condition])
 		return transitlists,success
 	
 	def MCMC_Params_To_TTVFast(self,planet_params):
@@ -189,23 +261,26 @@ class TTVCompute(object):
 
 		return epoch,ttvfast_pars
 	
-	def MCMC_Param_TransitTimes(self,planet_params,tFin):
+	def MCMC_Param_TransitTimes(self,planet_params,tFin,full_data=False):
 		""" Return transit times for input parameters given in the form:
 				[ mass, period, ex, ey, I, Omega , T_0 ]
 			for each planet """
 		epoch,ttvfast_pars = self.MCMC_Params_To_TTVFast(planet_params)
+		if full_data:
+			return self.TransitData(tFin,ttvfast_pars,t0=epoch)
+			
 		return self.TransitTimes(tFin,ttvfast_pars,t0=epoch)
 	
-	def MCMC_CoplanarParam_TransitTimes(self,coplanar_planet_params,tFin):
+	def MCMC_CoplanarParam_TransitTimes(self,coplanar_planet_params,tFin,full_data=False):
 		""" Return transit times for input parameters given in the form:
 				[ mass, period, ex, ey, I, Omega , T_0 ]
 			for each planet """
 		mass,period,ex,ey,T0 = coplanar_planet_params.reshape(-1, 5).T
 		npl = len(mass)
-		full_pars = np.vstack((mass,period,ex,ey,np.pi/2.*np.ones(npl),np.zeros(npl),T0)).T
-		return self.MCMC_Param_TransitTimes(full_pars,tFin)
+		full_pars = np.vstack((mass,period,ex,ey,np.pi/2.*np.ones(npl),np.zeros(npl),T0)).T			
+		return self.MCMC_Param_TransitTimes(full_pars,tFin,full_data=full_data)
 	
-	def MCMC_RelativeNodeParam_TransitTimes(self,rel_node_planet_params,tFin):
+	def MCMC_RelativeNodeParam_TransitTimes(self,rel_node_planet_params,tFin,full_data=False):
 		""" Return transit times for input parameters given in the form:
 				1st planet: 	[ mass, period, ex, ey, I, T_0 ] (Omega = 0)
 				Other planets:	[ mass, period, ex, ey, I, Omega=0 , T_0 ]
@@ -213,7 +288,7 @@ class TTVCompute(object):
 		m0,p0,ex0,ey0,I0,T00 = rel_node_planet_params[:6]
 		p0params = np.array([m0,p0,ex0,ey0,I0,0.0,T00])
 		full_pars = np.vstack(( p0params,rel_node_planet_params[6:].reshape(-1, 7) ))
-		return self.MCMC_Param_TransitTimes(full_pars,tFin)
+		return self.MCMC_Param_TransitTimes(full_pars,tFin,full_data=full_data)
 		
 class TransitObservations(object): 
 	def __init__(self,observed_transit_data):
