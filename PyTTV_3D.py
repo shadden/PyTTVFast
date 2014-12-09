@@ -289,7 +289,27 @@ class TTVCompute(object):
 		p0params = np.array([m0,p0,ex0,ey0,I0,0.0,T00])
 		full_pars = np.vstack(( p0params,rel_node_planet_params[6:].reshape(-1, 7) ))
 		return self.MCMC_Param_TransitTimes(full_pars,tFin,full_data=full_data)
-		
+
+##########################################################################################		
+#
+#			Transit Observtaions Class
+#			--------------------------
+#			
+#			Represents a collection of observed transit times for a multi-planet system.
+#
+#			Methods:
+#			--------
+#			get_chi2(transitList): 
+#				Return the resulting chi^2 value from comparing `transitList'  to observed
+#				 transits.
+#
+#			tFinal():
+#				Final transit observed.
+#
+#			tInit():
+#				First transit observed.
+##########################################################################################
+
 class TransitObservations(object): 
 	def __init__(self,observed_transit_data):
 		self.observed_transit_data = observed_transit_data
@@ -431,30 +451,7 @@ class TTVFit(TTVCompute):
 			
 			
 		chi2 = self.Observations.get_chi2(transit_list)
-		return - 0.5 * chi2
-	
-	def ParameterFitnessWithTransitDuration(self,planet_params):
-		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
-		if planet_params.shape[-1]%7==0:
-			transits,success = self.MCMC_Param_TransitTimes(planet_params,tFinal)
-		elif len(planet_params.reshape(-1)) == 7 * self.Observations.nplanets - 1:
-			transit_data,success = self.MCMC_RelativeNodeParam_TransitTimes(planet_params,tFinal,full_data=True)
-		else:
-			print "Bad input dimensions!"
-			raise
-		if not success:
-			return -np.inf
-		try:
-			transit_list = [ transits[i][nums,0] for i,nums in enumerate(self.Observations.transit_numbers) ]
-		except:
-			# If the number of computed transits is less than the number of observed transits
-			#	then -infinity should be returned
-			return -np.inf
-
-		rsky_list = [ transits[i][nums,1] for i,nums in enumerate(self.Observations.transit_numbers) ]
-		vsky_list = [ transits[i][nums,2] for i,nums in enumerate(self.Observations.transit_numbers) ]
-
-		
+		return - 0.5 * chi2	
 		
 	def LeastSquareParametersFit(self,params0,inclination_data=None):
 		"""
@@ -552,7 +549,8 @@ class TTVFit(TTVCompute):
 		npl = self.Observations.nplanets
 		assert mass.shape[0]==ex.shape[0]==ey.shape[0]==npl, "Improper input dimensions!"
 		return np.vstack((mass,self.Observations.PeriodEstimates,ex,ey,np.ones(npl)*np.pi/2.,np.zeros(npl),self.Observations.tInitEstimates)).T
-
+			
+	
 #########################################################################################################
 #########################	Run fitting of observed transits and inclinations	#########################
 #########################################################################################################
@@ -638,8 +636,6 @@ if __name__=="__main__":
 	test_elements = np.array([[ 1.e-5, 1.0*45.1, 0.1, 0.15,  inc[0] , 1.3 , 100.],\
 							  [ 1.e-5, 2.05*45.1,0.01,-0.01, inc[1] , 1.2 , 99.9]])
 	savetxt('./00_test_directory/true_parameters.txt',test_elements)
-	alt_elements = test_elements.copy()
-	alt_elements[1,4] = np.pi - alt_elements[1,4]
 	
 	nb = TTVCompute()
 	transits,success = nb.MCMC_Param_TransitTimes(test_elements,tfin )
@@ -669,12 +665,10 @@ if __name__=="__main__":
 	print "TTV Fast Coordinates"
 	for i in range(2):
 		print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(test_elements)[1][i]))
-		print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(alt_elements)[1][i]))
 		print
 	
 	for i,ttimes in enumerate(obs_data):
 		np.savetxt("./00_test_directory/planet%d.txt"%i,ttimes)
 	
 	fit.ParameterPlot(test_elements)
-	fit.ParameterPlot(alt_elements,ShowObs=False)
 	pl.show()
