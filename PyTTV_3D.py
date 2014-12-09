@@ -433,6 +433,28 @@ class TTVFit(TTVCompute):
 		chi2 = self.Observations.get_chi2(transit_list)
 		return - 0.5 * chi2
 	
+	def ParameterFitnessWithTransitDuration(self,planet_params):
+		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
+		if planet_params.shape[-1]%7==0:
+			transits,success = self.MCMC_Param_TransitTimes(planet_params,tFinal)
+		elif len(planet_params.reshape(-1)) == 7 * self.Observations.nplanets - 1:
+			transit_data,success = self.MCMC_RelativeNodeParam_TransitTimes(planet_params,tFinal,full_data=True)
+		else:
+			print "Bad input dimensions!"
+			raise
+		if not success:
+			return -np.inf
+		try:
+			transit_list = [ transits[i][nums,0] for i,nums in enumerate(self.Observations.transit_numbers) ]
+		except:
+			# If the number of computed transits is less than the number of observed transits
+			#	then -infinity should be returned
+			return -np.inf
+
+		rsky_list = [ transits[i][nums,1] for i,nums in enumerate(self.Observations.transit_numbers) ]
+		vsky_list = [ transits[i][nums,2] for i,nums in enumerate(self.Observations.transit_numbers) ]
+
+		
 		
 	def LeastSquareParametersFit(self,params0,inclination_data=None):
 		"""
@@ -596,16 +618,33 @@ if False:
 	
 if __name__=="__main__":
 	import sys
-	test_elements = np.array([[ 1.e-5, 1.0, 0.1, 0.15, np.pi / 2. - 0.03, 1.3 , 100.],\
-							  [ 1.e-5, 2.05,0.01,-0.01, np.pi / 2., 1.2 , 99.9]])
+	tfin = 50 * 45.1
+	b1 = 0.251
+	b2 = 0.
+	with open("./00_test_directory/inclination_data.txt","w") as fi:
+		fi.write("1.0    0.12\n")
+		fi.write("1.0    0.2\n")
+		fi.write("b       0.151   0.138\n")
+		fi.write("c       .85    0.141\n")
 	
-	test_cp_elements = np.array([[ 1.e-5, 1.0, 0.01, 0.02, 100.],\
-							   [1.e-5, 2.05,0.01,-0.01, 99.9]])
-
+	with open("./00_test_directory/inclination_data.txt") as fi:
+		lines = [l.split() for l in fi.readlines()]
+	mstar,sigma_mstar = map(float,lines[0])
+	rstar,sigma_rstar = map(float,lines[1])
+	b,sigma_b = np.array([map(float,l[1:]) for l in lines[2:] ]).T
+	b_Obs = ImpactParameterObservations([rstar,sigma_rstar],[mstar,sigma_mstar], vstack((b,sigma_b)).T)
+	inc,sigma_inc= b_Obs.ImpactParametersToInclinations(np.array([45.1 , 2.05*45.1]))
+	
+	test_elements = np.array([[ 1.e-5, 1.0*45.1, 0.1, 0.15,  inc[0] , 1.3 , 100.],\
+							  [ 1.e-5, 2.05*45.1,0.01,-0.01, inc[1] , 1.2 , 99.9]])
+	savetxt('./00_test_directory/true_parameters.txt',test_elements)
+	alt_elements = test_elements.copy()
+	alt_elements[1,4] = np.pi - alt_elements[1,4]
+	
 	nb = TTVCompute()
-	transits,success = nb.MCMC_Param_TransitTimes(test_elements,200.)
+	transits,success = nb.MCMC_Param_TransitTimes(test_elements,tfin )
 	obs_data = []
-	noise_lvl = 5.e-5
+	noise_lvl = 5.e-4 * 45.1
 	for times in transits:
 		ntimes = len(times)
 		noise  = np.random.normal(0,noise_lvl,ntimes)
@@ -622,17 +661,20 @@ if __name__=="__main__":
 	p1[5]  -=  p1[5]
 	p1=np.hstack((p1[:5] ,p1[6:] ))
 	print "First transit time"
-	print transits[0][0], "\n",nb.MCMC_Param_TransitTimes(p0,200.)[0][0][0],"\n"
+	print transits[0][0], "\n",nb.MCMC_Param_TransitTimes(p0,tfin)[0][0][0],"\n"
 	
 	print "Parameter Fitness"
 	print fit.ParameterFitness(test_elements.reshape(-1)),"\n",fit.ParameterFitness(p0),"\n",fit.ParameterFitness(p1),"\n"
 	
 	print "TTV Fast Coordinates"
-	print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(test_elements)[1][0]))
-	print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(p0)[1][0]))
+	for i in range(2):
+		print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(test_elements)[1][i]))
+		print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(alt_elements)[1][i]))
+		print
 	
+	for i,ttimes in enumerate(obs_data):
+		np.savetxt("./00_test_directory/planet%d.txt"%i,ttimes)
 	
-	
-#	fit.ParameterPlot(test_elements)
-#	fit.ParameterPlot(fitdat[0],False)
-#	pl.show()
+	fit.ParameterPlot(test_elements)
+	fit.ParameterPlot(alt_elements,ShowObs=False)
+	pl.show()
