@@ -565,6 +565,7 @@ class TTVFitnessAdvanced(TTVFitness):
 			ntrans = self.transit_numbers[i]
 			pl.errorbar(otransits[i],otransits[i] - transits[i][ntrans],fmt='%ss'%col,yerr=self.transit_uncertainties[i])
 		return transits
+
 	def CoplanarParametersTTVFit(self,params0):
 		"""Use L-M minimization to find the best-fit set of input parameters along with an estimated covariance matrix"""
 		target_data = np.array([])
