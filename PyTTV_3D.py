@@ -343,7 +343,7 @@ class TTVFit(TTVCompute):
 			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
 		else:
 			print "Bad input dimensions!"
-			raise
+			raise ValueError()
 		
 		if not success:
 			return -np.inf
