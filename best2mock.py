@@ -1,5 +1,5 @@
 import os
-import PyTTVFast as nTTV
+import PyTTV_3D as nTTV
 import numpy as np
 import matplotlib.pyplot as pl
 from scipy.optimize import curve_fit
@@ -14,12 +14,13 @@ def linefit_resids(x,y,sigma=None):
 	return y - s*x -m
 
 def MakeArtificialDir(nbfit,pars,dir='./Artificial',showplot=False):
-	transitTimes,sucess = nbfit.CoplanarParametersTransformedTransits(pars)
+	tmax = np.max(map(np.max, nbfit.Observations.transit_times))
+	transitTimes,sucess = nbfit.MCMC_CoplanarParam_TransitTimes(pars,tmax +3.)
 	os.system('mkdir -p %s'%dir)
 	fi = open("%s/planets.txt"%dir,"w")
 	np.savetxt("%s/inpars.txt"%dir,pars)
 	for i,times in enumerate(transitTimes):
-		noiseLvl = np.median(nbody_fit.transit_uncertainties[i])
+		noiseLvl = np.median(nbfit.Observations.transit_uncertainties[i])
 		nTransits = len(times)
 		noise = np.random.normal(0.0,noiseLvl,nTransits	)
 		noisyTimes = times + noise
@@ -32,7 +33,7 @@ def MakeArtificialDir(nbfit,pars,dir='./Artificial',showplot=False):
 	if showplot:
 		pl.show()		
 
-if __name__=="__main__":
+if False: #__name__=="__main__":
 	
 	# Open and read transit time files
 	try:
@@ -41,7 +42,7 @@ if __name__=="__main__":
 	except:
 		raise Exception("Planets file(s) not found!")
 
-	nbody_fit=nTTV.TTVFitnessAdvanced([np.loadtxt(f) for f in planetNames])
+	nbody_fit=nTTV.TTVFit([np.loadtxt(f) for f in planetNames])
 	# Load best-fit parameters
 	
 	try:
