@@ -33,7 +33,7 @@ def MakeArtificialDir(nbfit,pars,dir='./Artificial',showplot=False):
 	if showplot:
 		pl.show()		
 
-if False: #__name__=="__main__":
+if  __name__=="__main__":
 	
 	# Open and read transit time files
 	try:
@@ -44,7 +44,7 @@ if False: #__name__=="__main__":
 
 	nbody_fit=nTTV.TTVFit([np.loadtxt(f) for f in planetNames])
 	# Load best-fit parameters
-	
+if False:	
 	try:
 		bestpars = np.loadtxt('bestpars.txt')
 	except:
