@@ -271,6 +271,13 @@ class TTVCompute(object):
 			
 		return self.TransitTimes(tFin,ttvfast_pars,t0=epoch)
 	
+	def MCMC_CoplanarParams_To_TTVFast(self,coplanar_planet_params):
+		""" Return TTVFast input converted from coplanar parameters"""
+		mass,period,ex,ey,T0 = coplanar_planet_params.reshape(-1, 5).T
+		npl = len(mass)
+		full_pars = np.vstack((mass,period,ex,ey,np.pi/2.*np.ones(npl),np.zeros(npl),T0)).T			
+		return self.MCMC_Params_To_TTVFast(full_pars)
+		
 	def MCMC_CoplanarParam_TransitTimes(self,coplanar_planet_params,tFin,full_data=False):
 		""" Return transit times for input parameters given in the form:
 				[ mass, period, ex, ey, I, Omega , T_0 ]
@@ -338,7 +345,8 @@ class TransitObservations(object):
 		for i,transits in enumerate(transitsList):
 			chi2 += np.sum([  ((transits - self.transit_times[i]) / self.transit_uncertainties[i] )**2 ])
 		return chi2
-	
+	def get_chi2_per_planet(self,transitsList):
+		return [ np.sum([  ((transits - self.transit_times[i]) / self.transit_uncertainties[i] )**2 ]) for i,transits in enumerate(transitsList) ]
 	def tFinal(self):
 		return np.max( self.flat_transits )
 	def tInit(self):
@@ -653,7 +661,7 @@ if False:
 #########################				Fit generated data 						#########################
 #########################################################################################################
 	
-if __name__=="__main__":
+if __name__=="__xxx__":
 	import sys
 	tfin = 70 * 45.1
 	pratio = 1.53
