@@ -574,8 +574,9 @@ class TTVFit(TTVCompute):
 					
 			col = color_pallette[i%len(color_pallette)]
 			per = self.Observations.PeriodEstimates[i]		
-			pl.plot(transits[i], transits[i] - np.arange(len(transits[i])) * per - T0[i],"%s-"%col)
-	
+			nnn = np.min([x[0] for x in self.Observations.transit_numbers])
+			pl.plot(transits[i], transits[i] - (nnn+np.arange(len(transits[i]))) * per - T0[i],"%s-"%col)
+
 			if ShowObs:
 				otimes = self.Observations.transit_times[i]
 				ebs = self.Observations.transit_uncertainties[i]
@@ -589,8 +590,6 @@ class TTVFit(TTVCompute):
 	
 		pl.subplots_adjust(hspace=0.0)
 		
-		
-
 		
 	def coplanar_initial_conditions(self,mass,ex,ey):
 		npl = self.Observations.nplanets
@@ -658,9 +657,16 @@ if False:
 
 	
 #########################################################################################################
-#########################				Fit generated data 						#########################
+#########################		Fit generated data 			#########################
 #########################################################################################################
 	
+if __name__=="__main__":
+	try:
+		with open("planets.txt") as fi:
+			pls = [l.strip() for l in fi.readlines()]
+		nbfit = TTVFit([loadtxt(x) for x in pls])
+	except:
+		print "no planets file found."
 if __name__=="__xxx__":
 	import sys
 	tfin = 70 * 45.1
