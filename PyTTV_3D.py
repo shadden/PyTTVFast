@@ -296,11 +296,28 @@ class TTVCompute(object):
 	def MCMC_RelativeNodeParam_TransitTimes(self,rel_node_planet_params,tFin,full_data=False):
 		""" Return transit times for input parameters given in the form:
 				1st planet: 	[ mass, period, ex, ey, I, T_0 ] (Omega = 0)
-				Other planets:	[ mass, period, ex, ey, I, Omega=0 , T_0 ]
+				Other planets:	[ mass, period, ex, ey, I, Omega , T_0 ]
 			for each planet """
 		m0,p0,ex0,ey0,I0,T00 = rel_node_planet_params[:6]
 		p0params = np.array([m0,p0,ex0,ey0,I0,0.0,T00])
 		full_pars = np.vstack(( p0params,rel_node_planet_params[6:].reshape(-1, 7) ))
+		return self.MCMC_Param_TransitTimes(full_pars,tFin,full_data=full_data)
+	
+	def MCMC_NodeOnlyParam_TransitTimes(self,node_planet_params,tFin,full_data=False):
+		""" Return transit times for input parameters given in the form:
+				1st planet: 	[ mass, period, ex, ey, T_0 ] (I=90 deg. ,Omega = 0)
+				Other planets:	[ mass, period, ex, ey, Omega, T_0 ] ( I=90 deg. )
+			for each planet """
+
+		m0,p0,ex0,ey0,T00 = node_planet_params[:5]
+		p0params = np.array([m0,p0,ex0,ey0, np.pi/2. ,0.0, T00])
+
+		mass,period,ex,ey,Omega,T0= node_planet_params[5:].reshape(-1, 6).T
+		
+		pOtherparams=np.vstack((mass,period,ex,ey,np.pi/2*np.ones(len(mass)),Omega,T0)).T
+		
+		full_pars = np.vstack(( p0params,pOtherparams ))
+		
 		return self.MCMC_Param_TransitTimes(full_pars,tFin,full_data=full_data)
 
 ##########################################################################################		
@@ -454,22 +471,42 @@ class TTVFit(TTVCompute):
 		"""
 		Return log-likelihood = -0.5* chi*2 computed from planet parameters given 
 		as a list in the form:
-			mass, period, ex, ey , I , Omega, T0
-				---- OR ----
-			[	[mass0, period0, ex0, ey0 , I0 , T00],
-				[mass1, period1, ex1, ey1 , I1 , dOmega, T01],
-				...
-			]
-				---- OR ----
+
 			mass, period, ex, ey , T0
+
+				---- OR ----
+
+			mass, period, ex, ey , I , Omega, T0
+			
+				---- OR ----
+
+				[	
+				 [mass0, period0, ex0, ey0 , I0 , T00],
+				 [mass1, period1, ex1, ey1 , I1 , dOmega, T01],
+				  ...
+				]
+				
+				---- OR ----
+				
+				[	
+				 [mass0, period0, ex0, ey0 ,  T00 ],
+				 [mass1, period1, ex1, ey1 , dOmega, T01],
+				  ...
+				]
+						
 		for each planet.
 		"""
 		
 		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
 		if planet_params.shape[-1]%7==0:
 			transits,success = self.MCMC_Param_TransitTimes(planet_params,tFinal)
+	
 		elif len(planet_params.reshape(-1)) == 7 * self.Observations.nplanets - 1:
 			transits,success = self.MCMC_RelativeNodeParam_TransitTimes(planet_params,tFinal)
+	
+		elif len(planet_params.reshape(-1)) == 6 * self.Observations.nplanets - 1:
+			transits,success = self.MCMC_NodeOnlyParam_TransitTimes(planet_params,tFinal)
+	
 		elif planet_params.shape[-1]%5==0:
 			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
 		else:
