@@ -143,7 +143,10 @@ class TTVCompute(object):
 			eccs = np.zeros(nplanets)
 			
 		# Don't let the periapse set timestep less than 1/10th the planet period
-		dtfactors =  np.maximum( np.power( (1. - eccs ) ,1.5) , 0.1 )
+		try:
+			dtfactors =  np.maximum( np.power( (1. - eccs ) ,1.5) , 0.1 )
+		except:
+			dtfactors = 0.1
 		dt = dtfrac * np.min( periods * dtfactors )
 		
 		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) )) + 1
@@ -214,7 +217,10 @@ class TTVCompute(object):
 			eccs = np.zeros(nplanets)
 			
 		# Don't let the periapse set timestep less than 1/10th the planet period
-		dtfactors =  np.maximum( np.power( (1. - eccs ) ,1.5) , 0.1 )
+		try:
+			dtfactors =  np.maximum( np.power( (1. - eccs ) ,1.5) , 0.1 )
+		except:
+			dtfactors = 0.1
 		dt = dtfrac * np.min( periods * dtfactors )
 		
 		n_events = int(np.sum(np.ceil( (tfin-t0) / periods + 1) )) + 1
@@ -664,7 +670,13 @@ if __name__=="__main__":
 	try:
 		with open("planets.txt") as fi:
 			pls = [l.strip() for l in fi.readlines()]
-		nbfit = TTVFit([loadtxt(x) for x in pls])
+		planet_data=[loadtxt(x) for x in pls]
+	
+		while min( array([ min(tr[:,0]) for tr in planet_data])  ) != 0:
+                	print "re-numbering transits..."
+              		for data in planet_data:
+				data[:,0] -= 1
+		nbfit = TTVFit(planet_data)
 	except:
 		print "no planets file found."
 if __name__=="__xxx__":
