@@ -498,16 +498,21 @@ class TTVFit(TTVCompute):
 		"""
 		
 		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
-		if planet_params.shape[-1]%7==0:
+	
+		# Full 3-D input
+		if len(planet_params.reshape(-1))== 7 * self.Observations.nplanets:
 			transits,success = self.MCMC_Param_TransitTimes(planet_params,tFinal)
 	
+		# Nodes relative to inner planet node inputs
 		elif len(planet_params.reshape(-1)) == 7 * self.Observations.nplanets - 1:
 			transits,success = self.MCMC_RelativeNodeParam_TransitTimes(planet_params,tFinal)
 	
+		# All inclinations = 90 deg. only nodes of non-first planet vary
 		elif len(planet_params.reshape(-1)) == 6 * self.Observations.nplanets - 1:
 			transits,success = self.MCMC_NodeOnlyParam_TransitTimes(planet_params,tFinal)
 	
-		elif planet_params.shape[-1]%5==0:
+		# All coplanar
+		elif len(planet_params.reshape(-1)) == 5 * self.Observations.nplanets :
 			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
 		else:
 			print "Bad input dimensions!"
