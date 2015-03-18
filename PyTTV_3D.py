@@ -305,18 +305,11 @@ class TTVCompute(object):
 	
 	def MCMC_NodeOnlyParam_TransitTimes(self,node_planet_params,tFin,full_data=False):
 		""" Return transit times for input parameters given in the form:
-				1st planet: 	[ mass, period, ex, ey, T_0 ] (I=90 deg. ,Omega = 0)
-				Other planets:	[ mass, period, ex, ey, Omega, T_0 ] ( I=90 deg. )
+				 planets:	[ mass, period, ex, ey, Omega, T_0 ] ( I=90 deg. )
 			for each planet """
 
-		m0,p0,ex0,ey0,T00 = node_planet_params[:5]
-		p0params = np.array([m0,p0,ex0,ey0, np.pi/2. ,0.0, T00])
-
-		mass,period,ex,ey,Omega,T0= node_planet_params[5:].reshape(-1, 6).T
-		
-		pOtherparams=np.vstack((mass,period,ex,ey,np.pi/2*np.ones(len(mass)),Omega,T0)).T
-		
-		full_pars = np.vstack(( p0params,pOtherparams ))
+		mass,period,ex,ey,Omega,T0= node_planet_params.reshape(-1, 6).T
+		full_pars=np.vstack((mass,period,ex,ey,np.pi/2*np.ones(len(mass)),Omega,T0)).T
 		
 		return self.MCMC_Param_TransitTimes(full_pars,tFin,full_data=full_data)
 
@@ -508,15 +501,14 @@ class TTVFit(TTVCompute):
 			transits,success = self.MCMC_RelativeNodeParam_TransitTimes(planet_params,tFinal)
 	
 		# All inclinations = 90 deg. only nodes of non-first planet vary
-		elif len(planet_params.reshape(-1)) == 6 * self.Observations.nplanets - 1:
+		elif len(planet_params.reshape(-1)) == 6 * self.Observations.nplanets:
 			transits,success = self.MCMC_NodeOnlyParam_TransitTimes(planet_params,tFinal)
-	
+
 		# All coplanar
 		elif len(planet_params.reshape(-1)) == 5 * self.Observations.nplanets :
 			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
 		else:
-			print "Bad input dimensions!"
-			raise ValueError()
+			raise ValueError("Bad input dimensions: %d "%(len(planet_params.reshape(-1))))
 		
 		if not success:
 			return -np.inf
