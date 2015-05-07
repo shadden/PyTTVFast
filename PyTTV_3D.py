@@ -27,7 +27,7 @@ if who.readline().strip() =='samuelhadden':
 	LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
 else:
 	print "On Quest..."
-	LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
+	LIBPATH = "/projects/b1002/shadden/07_AnalyticTTV/03_TTVFast/PyTTVFast"
 who.close()
 
 PLOTS = False
