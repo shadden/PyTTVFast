@@ -123,7 +123,7 @@ class TTVCompute(object):
 		assert input_type in  input_types, "Invalid input type, valid choised are: '%s', '%s', or '%s'"%(input_types[0],input_types[1],input_types[2])
 		input_n = input_types.index(input_type)
 			
-		assert type(planet_params)==np.ndarray and (planet_params.shape)[-1]==7, "Bad planet parameters array!"
+		(planet_params.shape)[-1]==7, "Bad planet parameters array:\n " + "Recieve data type:" + str(type(planet_params)) 
 
 		nplanets=len(planet_params)
 		params = np.array([1.0,GM])
@@ -578,6 +578,47 @@ class TTVFit(TTVCompute):
 				return ttvchi2
 		
 		return leastsq(objectivefn, params0,full_output=1)
+	
+	def LeastSquareFit_Fixed_Parameter(self,params0,FixedIndices):
+		"""
+		Use L-M minimization to find the best-fit set of input parameters along with an estimated covariance matrix.
+		The method will assume coplanar orbits or full 3D orbits based on the number of input parameters.
+		"""
+		npl = self.Observations.nplanets
+		assert len(params0.reshape(-1)) == npl * 5, "Shape of initial parameter does not match what is required for the number of planets!"
+			
+		target_data = np.array([])
+		errors = np.array([])
+		
+		for time,err in zip(self.Observations.transit_times,self.Observations.transit_uncertainties):
+			target_data = np.append(target_data,time)
+			errors = np.append(errors,err)
+		
+		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
+		
+		FixedPars = params0[FixedIndices]
+		
+		def objectivefn(x):
+			inpars = np.insert( x , FixedIndices , FixedPars )
+			transits,success = self.MCMC_CoplanarParam_TransitTimes(inpars,tFinal)
+			
+			answer = np.array([],dtype=float)
+			for i,t in enumerate(transits):
+				tnums = self.Observations.transit_numbers[i]
+				try:
+					answer = np.append( answer,np.array(t[tnums]) )
+				except:
+					return -np.inf * np.ones(len(target_data))
+			#
+			try:
+				ttvchi2 = (answer - target_data)/errors
+			except:
+				return -np.inf * np.ones(len(target_data))
+			
+			return ttvchi2
+		
+		fitpars = leastsq(objectivefn, np.delete(params0,FixedIndices) ,full_output=1)[0]
+		return np.insert( fitpars, FixedIndices, FixedPars)
 	
 	
 	def ParameterPlot(self,planet_params,ShowObs=True):
