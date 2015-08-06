@@ -596,10 +596,11 @@ class TTVFit(TTVCompute):
 		
 		tFinal = self.Observations.tFinal() + np.max(self.Observations.PeriodEstimates)
 		
-		FixedPars = params0[FixedIndices]
+		FixedPars = (params0.reshape(1,npl*5))[0,FixedIndices]
 		
 		def objectivefn(x):
-			inpars = np.insert( x , FixedIndices , FixedPars )
+			inpars = np.insert( x , np.array(FixedIndices)-np.arange(len(FixedIndices)) , FixedPars )
+			#print inpars	
 			transits,success = self.MCMC_CoplanarParam_TransitTimes(inpars,tFinal)
 			
 			answer = np.array([],dtype=float)
@@ -618,10 +619,10 @@ class TTVFit(TTVCompute):
 			return ttvchi2
 		
 		fitpars = leastsq(objectivefn, np.delete(params0,FixedIndices) ,full_output=1)[0]
-		return np.insert( fitpars, FixedIndices, FixedPars)
+		return np.insert( fitpars, np.array(FixedIndices)-np.arange(len(FixedIndices)), FixedPars)
 	
 	
-	def ParameterPlot(self,planet_params,ShowObs=True):
+	def ParameterPlot(self,planet_params,ShowObs=True,**kwargs):
 		"""
 		Plot TTVs from planet parameters given as a list in the form:
 			mass, period, ex, ey , I , Omega, T0
@@ -656,7 +657,7 @@ class TTVFit(TTVCompute):
 			col = color_pallette[i%len(color_pallette)]
 			per = self.Observations.PeriodEstimates[i]		
 			nnn = np.min([x[0] for x in self.Observations.transit_numbers])
-			pl.plot(transits[i], transits[i] - (nnn+np.arange(len(transits[i]))) * per - T0[i],"%s-"%col)
+			pl.plot(transits[i], transits[i] - (nnn+np.arange(len(transits[i]))) * per - T0[i],"%s-"%col,alpha=0.2,linewidth=1)
 
 			if ShowObs:
 				otimes = self.Observations.transit_times[i]
