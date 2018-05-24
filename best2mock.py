@@ -14,7 +14,7 @@ def linefit_resids(x,y,sigma=None):
 	return y - s*x -m
 
 def MakeArtificialDir(nbfit,pars,dir='./Artificial',showplot=False):
-	tmax = np.max(map(np.max, nbfit.Observations.transit_times))
+	tmax = np.max(list(map(np.max, nbfit.Observations.transit_times)))
 	transitTimes,sucess = nbfit.MCMC_CoplanarParam_TransitTimes(pars,tmax +3.)
 	os.system('mkdir -p %s'%dir)
 	fi = open("%s/planets.txt"%dir,"w")

@@ -21,14 +21,15 @@ from scipy.optimize import minimize,curve_fit,leastsq
 
 DEFAULT_TRANSIT = -1
 import os
-who =os.popen("whoami") 
-if who.readline().strip() =='samuelhadden':
-	print "On laptop..."
-	LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
-else:
-	print "On Quest..."
-	LIBPATH = "/projects/b1002/shadden/07_AnalyticTTV/03_TTVFast/PyTTVFast"
-who.close()
+#who =os.popen("whoami") 
+#if who.readline().strip() =='samuelhadden':
+#	print("On laptop...")
+#	LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
+#else:
+#	print("On Quest...")
+#	LIBPATH = "/projects/b1002/shadden/07_AnalyticTTV/03_TTVFast/PyTTVFast"
+#who.close()
+LIBPATH="/home/shadden/Projects/03_TESS_TTV/PyTTVFast"
 
 PLOTS = False
 
@@ -99,15 +100,15 @@ class libwrapper(object):
 			self._TTVFast(pars,dt,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag)
 			return True
 		except RuntimeError:
-			print "Warning: TTVFast did not generate the expected number of transits!"
-			print "Trying once more with smaller time step: ",
+			print("Warning: TTVFast did not generate the expected number of transits!")
+			print("Trying once more with smaller time step: ", end=' ')
 			try:
 				self._TTVFast(pars,dt/3.,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag)
-				print "Succeeded"
+				print("Succeeded")
 				return True
 			except RuntimeError:
-				print "Failed"
-				print "Parameters: ", " ".join( map(lambda x: "%.3g"%x, pars[2:]))
+				print("Failed")
+				print("Parameters: ", " ".join( ["%.3g"%x for x in pars[2:]]))
 				return False
 #
 
@@ -384,7 +385,7 @@ class ImpactParameterObservations(object):
 			""" 
 			Convert periods and impact parameters to inclinations using stellar radius and mass.
 			""" 	
- 			rstar = self.r2au * self.Rstar
+			rstar = self.r2au * self.Rstar
 			sigma_rstar = self.r2au * self.Rstar_err
 			mstar = self.Mstar
 			sigma_mstar = self.Mstar_err
@@ -398,11 +399,11 @@ class ImpactParameterObservations(object):
 			dcos_dM = -(1./3.) * cosi0  / mstar
 			dcos_dr = b / a
 			dcos_db = rstar / a
- 			sigma_cosi = np.sqrt( (dcos_dr * sigma_rstar)**2 + (dcos_dM * sigma_mstar )**2 + (dcos_db * sigma_b )**2 )
+			sigma_cosi = np.sqrt( (dcos_dr * sigma_rstar)**2 + (dcos_dM * sigma_mstar )**2 + (dcos_db * sigma_b )**2 )
 
- 			return np.arccos(cosi0) , np.diag(sigma_cosi)
- 		
- 		def ImpactParametersPriors(self,inclinations, periods):
+			return np.arccos(cosi0) , np.diag(sigma_cosi)
+		
+		def ImpactParametersPriors(self,inclinations, periods):
 			""" 
 			Gaussian priors based on formula (a/R_*) cos(i) = b.  Assumes that fractional uncertainties
 			are sufficiently small that we can linearize cos(i)'s dependence on the parameter errors
@@ -425,9 +426,9 @@ class ImpactParameterObservations(object):
 			dcos_dr = b / a
 			dcos_db = rstar / a
 	
- 			sigma_cosi = np.sqrt( (dcos_dr * sigma_rstar)**2 + (dcos_dM * sigma_mstar )**2 + (dcos_db * sigma_b )**2 )
+			sigma_cosi = np.sqrt( (dcos_dr * sigma_rstar)**2 + (dcos_dM * sigma_mstar )**2 + (dcos_db * sigma_b )**2 )
 
- 			return -0.5 * np.sum ( (cosi - cosi0)**2 / sigma_cosi**2 )
+			return -0.5 * np.sum ( (cosi - cosi0)**2 / sigma_cosi**2 )
 
 ##########################################################################################		
 #
@@ -534,7 +535,7 @@ class TTVFit(TTVCompute):
 		elif len(params0.reshape(-1)) == npl * 7:
 			coplanar = False
 		else:
-			print "Shape of initial parameter does not match what is required for the number of planets!"
+			print("Shape of initial parameter does not match what is required for the number of planets!")
 			raise
 			
 		target_data = np.array([])
@@ -637,7 +638,7 @@ class TTVFit(TTVCompute):
 		elif planet_params.shape[-1]%5==0:
 			transits,success = self.MCMC_CoplanarParam_TransitTimes(planet_params,tFinal)
 		else:
-			print "Bad input dimensions!"
+			print("Bad input dimensions!")
 			raise
 		assert success, "Failed to generate TTVs from specified parameters!"
 
@@ -667,7 +668,7 @@ class TTVFit(TTVCompute):
 	
 			# Re-label y-ticks in minutes
 			locs,labls = pl.yticks()
-			locs = map(lambda x: int(round(24*60*x))/(24.*60.),locs[1:-1])
+			locs = [int(round(24*60*x))/(24.*60.) for x in locs[1:-1]]
 			pl.yticks( locs , 24.*60.*np.array(locs) ) 
 	
 		pl.subplots_adjust(hspace=0.0)
@@ -698,7 +699,7 @@ if False:
 
 
 	while min( array([ min(tr[:,0]) for tr in input_data])  ) != 0:
-		print "re-numbering transits..."
+		print("re-numbering transits...")
 		for data in input_data:
 			data[:,0] -= 1
 	
@@ -707,23 +708,23 @@ if False:
 	
 	with open("inclination_data.txt") as fi:
 		lines = [l.split() for l in fi.readlines()]
-	mstar,sigma_mstar = map(float,lines[0])
-	rstar,sigma_rstar = map(float,lines[1])
-	b,sigma_b = np.array([map(float,l[1:]) for l in lines[2:] ]).T	
+	mstar,sigma_mstar = list(map(float,lines[0]))
+	rstar,sigma_rstar = list(map(float,lines[1]))
+	b,sigma_b = np.array([list(map(float,l[1:])) for l in lines[2:] ]).T	
 	b_Obs = ImpactParameterObservations([rstar,sigma_rstar],[mstar,sigma_mstar], vstack((b,sigma_b)).T)
 	
 	pars0=nbody_fit.coplanar_initial_conditions(1.e-5*ones(3),random.normal(0,0.02,3),random.normal(0,0.02,3) )
 	cp_pars0=pars0[:,(0,1,2,3,6)]
 	
 	fitdata = nbody_fit.LeastSquareParametersFit(cp_pars0)
-	print "Fitness: %.2f"%nbody_fit.ParameterFitness(fitdata[0])
+	print("Fitness: %.2f"%nbody_fit.ParameterFitness(fitdata[0]))
 	
 	best,cov = fitdata[:2]
 	
 	best3d = best.reshape(-1,5)
 	i0,sigma_i=b_Obs.ImpactParametersToInclinations(nbody_fit.Observations.PeriodEstimates)
 	best3d = np.hstack(( best3d[:,:4], i0.reshape(-1,1) , np.random.uniform(-0.005,0.005,(npl,1)), best3d[:,-1].reshape(-1,1) ))
-	print best3d.shape
+	print(best3d.shape)
 	best3d = best3d.reshape(-1)
 	fitdata = nbody_fit.LeastSquareParametersFit( best3d )
 	best,cov = fitdata[:2]
@@ -731,8 +732,8 @@ if False:
 	
 	fitdata2 = nbody_fit.LeastSquareParametersFit( best ,inclination_data = [cos(i0),diagonal(sigma_i)] )
 	best,cov = fitdata2[:2]
-	print "3D Fitness: %.2f"%nbody_fit.ParameterFitness(best)
-	print "3D likelihood: %.2f"%fit(best)
+	print("3D Fitness: %.2f"%nbody_fit.ParameterFitness(best))
+	print("3D likelihood: %.2f"%fit(best))
 	p = random.multivariate_normal(best,cov/25.,size=nwalkers)
 
 	    		
@@ -749,12 +750,12 @@ if __name__=="__main__":
 		planet_data=[loadtxt(x) for x in pls]
 	
 		while min( array([ min(tr[:,0]) for tr in planet_data])  ) != 0:
-                	print "re-numbering transits..."
-              		for data in planet_data:
+			print("re-numbering transits...")
+			for data in planet_data:
 				data[:,0] -= 1
 		nbfit = TTVFit(planet_data)
 	except:
-		print "no planets file found."
+		print("no planets file found.")
 if __name__=="__xxx__":
 	import sys
 	tfin = 70 * 45.1
@@ -769,9 +770,9 @@ if __name__=="__xxx__":
 	
 	with open("./00_test_directory/inclination_data.txt") as fi:
 		lines = [l.split() for l in fi.readlines()]
-	mstar,sigma_mstar = map(float,lines[0])
-	rstar,sigma_rstar = map(float,lines[1])
-	b,sigma_b = np.array([map(float,l[1:]) for l in lines[2:] ]).T
+	mstar,sigma_mstar = list(map(float,lines[0]))
+	rstar,sigma_rstar = list(map(float,lines[1]))
+	b,sigma_b = np.array([list(map(float,l[1:])) for l in lines[2:] ]).T
 	b_Obs = ImpactParameterObservations([rstar,sigma_rstar],[mstar,sigma_mstar], vstack((b,sigma_b)).T)
 	inc,sigma_inc= b_Obs.ImpactParametersToInclinations(np.array([45.1 , pratio*45.1]))
 	
@@ -791,7 +792,7 @@ if __name__=="__xxx__":
 	
 	fit = TTVFit(obs_data)
 	p0 = test_elements.copy().reshape(-1)
-	print 
+	print() 
 	dOmega = 0.3
 	p0[5] += dOmega
 	p0[5+7] += dOmega
@@ -799,16 +800,16 @@ if __name__=="__xxx__":
 	p1[5+7]-=  p1[5]
 	p1[5]  -=  p1[5]
 	p1=np.hstack((p1[:5] ,p1[6:] ))
-	print "First transit time"
-	print transits[0][0], "\n",nb.MCMC_Param_TransitTimes(p0,tfin)[0][0][0],"\n"
+	print("First transit time")
+	print(transits[0][0], "\n",nb.MCMC_Param_TransitTimes(p0,tfin)[0][0][0],"\n")
 	
-	print "Parameter Fitness"
-	print fit.ParameterFitness(test_elements.reshape(-1)),"\n",fit.ParameterFitness(p0),"\n",fit.ParameterFitness(p1),"\n"
+	print("Parameter Fitness")
+	print(fit.ParameterFitness(test_elements.reshape(-1)),"\n",fit.ParameterFitness(p0),"\n",fit.ParameterFitness(p1),"\n")
 	
-	print "TTV Fast Coordinates"
+	print("TTV Fast Coordinates")
 	for i in range(2):
-		print " ".join(map(lambda x: "%.4f"%x,fit.MCMC_Params_To_TTVFast(test_elements)[1][i]))
-		print
+		print(" ".join(["%.4f"%x for x in fit.MCMC_Params_To_TTVFast(test_elements)[1][i]]))
+		print()
 	
 	for i,ttimes in enumerate(obs_data):
 		np.savetxt("./00_test_directory/planet%d.txt"%i,ttimes)

@@ -7,12 +7,13 @@ DEFAULT_TRANSIT = -1
 import os
 who =os.popen("whoami") 
 if who.readline().strip() =='samuelhadden':
-	print "On laptop..."
+	print("On laptop...")
 	LIBPATH = "/Users/samuelhadden/15_TTVFast/TTVFast/c_version/myCode/PythonInterface"
 else:
-	print "On Quest..."
+	print("On Quest...")
 	LIBPATH = "/projects/b1002/shadden/7_AnalyticTTV/03_TTVFast/PyTTVFast"
 who.close()
+LIBPATH = "/home/shadden/Projects/03_TESS_TTV/PyTTVFast"
 
 PLOTS = False
 
@@ -109,15 +110,15 @@ class libwrapper(object):
 			self._TTVFast(pars,dt,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag)
 			return True
 		except RuntimeError:
-			print "Warning: TTVFast did not generate the expected number of transits!"
-			print "Trying once more with smaller time step: ",
+			print( "Warning: TTVFast did not generate the expected number of transits!")
+			print( "Trying once more with smaller time step: ")
 			try:
 				self._TTVFast(pars,dt/3.,t0,tfinal,nplanets,CalcTransitsArray,CalcRVArray,nRV,n_events,input_flag)
-				print "Succeeded"
+				print( "Succeeded")
 				return True
 			except RuntimeError:
-				print "Failed"
-				print "Parameters: ", " ".join( map(lambda x: "%.3g"%x, pars[2:]))
+				print("Failed")
+				print(("Parameters: ", " ".join( ["%.3g"%x for x in pars[2:]])))
 				return False
 #
 class TTVCompute(object):
@@ -160,13 +161,16 @@ class TTVCompute(object):
 		model = (n_events * CALCTRANSIT)()
 		for transit in model:
 			transit.time = DEFAULT_TRANSIT
-			
+		
 		success = self.interface.TTVFast(params,dt,t0,tfin,nplanets,model,None,0,n_events, input_n)
+		
 		if not success:
-			return [],False
+		    print("Internal TTVFast error.")
+		    return [],False
 		
 		transits = np.array([ ( transit.planet,transit.time ) for transit in model if transit.time != DEFAULT_TRANSIT ])
 		if len(transits)==0:
+			print("No transits recorded.")
 			return [],False
 		transitlists = []
 		for i in range(nplanets):
@@ -374,7 +378,7 @@ class TTVFitnessAdvanced(TTVFitness):
 			
 		periods = self.period_estimates[1:]/self.period_estimates[0]
 		
-		params = np.append( np.hstack((masses.reshape(-1,1),evectors)) , np.array( zip(periods,meanLongs) ) )
+		params = np.append( np.hstack((masses.reshape(-1,1),evectors)) , np.array( list(zip(periods,meanLongs)) ) )
 		return params
 		
 	def GenerateRandomInitialConditions(self,masses,sigma_dm_m,evecs,sigma_e,N,**kwargs):
@@ -413,7 +417,6 @@ class TTVFitnessAdvanced(TTVFitness):
 		####################################################################################################################
 		nbodyTransitOrder = np.argsort( np.array([ ntransits[0] for ntransits in nbody_transits] ))
 		while nbodyTransitOrder[0] != self.transitOrder[0]:
-			#print "shifting transit orders..."
 			firstToTransit = self.transitOrder[0]
 			for i in np.arange(nbodyTransitOrder.tolist().index(firstToTransit)):
 				planetNumber = nbodyTransitOrder[i]
@@ -480,7 +483,6 @@ class TTVFitnessAdvanced(TTVFitness):
 		####################################################################################################################
 		nbodyTransitOrder = np.argsort( np.array([ ntransits[0] for ntransits in nbody_transits] ))
 		while nbodyTransitOrder[0] != self.transitOrder[0]:
-			#print "shifting transit orders..."
 			firstToTransit = self.transitOrder[0]
 			for i in np.arange(nbodyTransitOrder.tolist().index(firstToTransit)):
 				planetNumber = nbodyTransitOrder[i]
